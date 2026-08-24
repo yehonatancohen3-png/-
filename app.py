@@ -13,6 +13,24 @@ st.set_page_config(
 # 2. טעינת מפתח ה-API
 load_dotenv()
 
+api_key = None
+
+# ניסיון קריאת המפתח מ-Streamlit Secrets (לשרת בענן)
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+elif "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+# ניסיון קריאת המפתח משתני סביבה (להרצה מקומית)
+else:
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+if not api_key:
+    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
+    st.stop()
+
+# אתחול הלקוח עם המפתח
+client = genai.Client(api_key=api_key)
+
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
 תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה, ללא שגיאות או המצאות.
@@ -42,9 +60,6 @@ SYSTEM_PROMPT = """
 - אל תמציא ציטוטים או מקורות שלא קיימים.
 - שמור על שפה תורנית, מכובדת ולמדנית.
 """
-
-# אתחול הלקוח
-client = genai.Client()
 
 def analyze_sugya(question: str):
     response = client.models.generate_content(
