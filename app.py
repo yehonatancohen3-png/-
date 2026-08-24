@@ -63,7 +63,7 @@ SYSTEM_PROMPT = """
 
 def analyze_sugya(question: str):
     response = client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-2.5-flash',
         contents=f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}"
     )
     return response.text
