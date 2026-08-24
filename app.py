@@ -26,7 +26,7 @@ if not api_key:
     st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
     st.stop()
 
-# הגדרת המפתח ב-SDK היציב
+# הגדרת המפתח
 genai.configure(api_key=api_key)
 
 SYSTEM_PROMPT = """
@@ -59,14 +59,33 @@ SYSTEM_PROMPT = """
 - שמור על שפה תורנית, מכובדת ולמדנית.
 """
 
-def analyze_sugya(question: str):
-    # מודל יציב ומהיר
+def get_working_model():
+    """מוצא את המודל האפשרי הראשון מהחשבון"""
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        available_models = [
+            m.name for m in genai.list_models() 
+            if 'generateContent' in m.supported_generation_methods
+        ]
+        if available_models:
+            # נחזיר את המודל הראשון שנמצא בחשבון
+            return available_models[0], available_models
+    except Exception as e:
+        return None, str(e)
+    return None, []
+
+def analyze_sugya(question: str):
+    selected_model, models_info = get_working_model()
+    
+    if not selected_model:
+        st.error(f"לא נשלפו מודלים זמינים מה-API.\nפרטים: {models_info}")
+        return None
+        
+    try:
+        model = genai.GenerativeModel(selected_model)
         response = model.generate_content(f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}")
         return response.text
     except Exception as e:
-        st.error(f"שגיאה בהפעלת המודל: {str(e)}")
+        st.error(f"שגיאה בהפעלת המודל ({selected_model}): {str(e)}")
         return None
 
 # 3. עיצוב הממשק
