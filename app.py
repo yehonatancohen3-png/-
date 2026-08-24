@@ -1,8 +1,7 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from google import genai
-from google.genai import errors
+import google.generativeai as genai
 
 # 1. הגדרות דף האינטרנט
 st.set_page_config(
@@ -27,8 +26,8 @@ if not api_key:
     st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
     st.stop()
 
-# אתחול הלקוח עם המפתח
-client = genai.Client(api_key=api_key)
+# הגדרת המפתח ב-SDK היציב
+genai.configure(api_key=api_key)
 
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
@@ -61,24 +60,14 @@ SYSTEM_PROMPT = """
 """
 
 def analyze_sugya(question: str):
-    # שמות המודלים המדויקים של ספריית google-genai
-    models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-    last_error = None
-
-    for model_name in models:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}"
-            )
-            return response.text
-        except errors.APIError as e:
-            last_error = f"שגיאת API במודל {model_name}: {e.message} (קוד: {e.code})"
-        except Exception as e:
-            last_error = f"שגיאה: {str(e)}"
-
-    st.error(f"לא ניתן לקבל תשובה מ-Gemini.\n{last_error}")
-    return None
+    # מודל יציב ומהיר
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}")
+        return response.text
+    except Exception as e:
+        st.error(f"שגיאה בהפעלת המודל: {str(e)}")
+        return None
 
 # 3. עיצוב הממשק
 st.title("📜 סוגיה בעיון")
