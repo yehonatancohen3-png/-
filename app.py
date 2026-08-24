@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors
 
 # 1. הגדרות דף האינטרנט
 st.set_page_config(
@@ -62,11 +63,24 @@ SYSTEM_PROMPT = """
 """
 
 def analyze_sugya(question: str):
-    response = client.models.generate_content(
-        model='gemini-2.0-flash',  # שם המודל הנתמך והרשמי
-        contents=f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}"
-    )
-    return response.text
+    # מודלים מומלצים לבדיקה
+    models = ['gemini-2.0-flash', 'gemini-1.5-flash']
+    last_error = None
+
+    for model_name in models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}"
+            )
+            return response.text
+        except errors.APIError as e:
+            last_error = f"שגיאת API במודל {model_name}: {e.message} (קוד: {e.code})"
+        except Exception as e:
+            last_error = f"שגיאה כללית במודל {model_name}: {str(e)}"
+
+    st.error(f"לא ניתן לקבל תשובה מ-Gemini.\nפירוט השגיאה: {last_error}")
+    return None
 
 # 3. עיצוב הממשק
 st.title("📜 סוגיה בעיון")
@@ -92,6 +106,6 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     with st.chat_message("assistant"):
         with st.spinner("מנתח את הסוגיה במקורות..."):
             answer = analyze_sugya(prompt)
-            st.markdown(answer)
-            
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+            if answer:
+                st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
