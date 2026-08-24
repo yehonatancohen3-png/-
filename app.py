@@ -27,7 +27,7 @@ if not api_key:
     st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
     st.stop()
 
-# אתחול הלקוח
+# אתחול הלקוח עם המפתח
 client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = """
@@ -61,8 +61,8 @@ SYSTEM_PROMPT = """
 """
 
 def analyze_sugya(question: str):
-    # שמות המודלים המעודכנים ב-Google AI Studio
-    models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-latest']
+    # שמות המודלים המדויקים של ספריית google-genai
+    models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
     last_error = None
 
     for model_name in models:
