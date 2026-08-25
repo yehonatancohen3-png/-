@@ -10,6 +10,25 @@ st.set_page_config(
     layout="centered"
 )
 
+# הוספת CSS ליישור כל הטקסטים והממשק מימין לשמאל (RTL)
+st.markdown(
+    """
+    <style>
+    /* יישור כל דף האתר מימין לשמאל */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        direction: rtl;
+        text-align: right;
+    }
+    /* יישור תיבת הקלט וההודעות בצ'אט */
+    [data-testid="stChatInput"], [data-testid="stChatMessage"] {
+        direction: rtl;
+        text-align: right;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # 2. טעינת מפתח ה-API
 load_dotenv()
 
