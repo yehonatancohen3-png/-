@@ -8,6 +8,8 @@ import json
 import re
 # ייבוא ספריית requests לביצוע בקשות HTTP לרשת (כמו API של ספריא)
 import requests
+# ייבוא ספריית uuid ליצירת מזהים ייחודיים לכל שיחה
+import uuid
 # ייבוא הפונקציה load_dotenv מתוך dotenv לטעינת משתני סביבה מקובץ .env
 from dotenv import load_dotenv
 # ייבוא ספריית Google Generative AI לעבודה עם מודלי Gemini
@@ -97,26 +99,34 @@ if not api_key:
 # הגדרת מפתח ה-API בספריית Google Generative AI לתקשורת מול השרתים
 genai.configure(api_key=api_key)
 
-# 3. מנגנון לשמירה וטעינה של היסטוריית השיחה מקובץ JSON מקומי
+# 3. מנגנון לשמירה וטעינה של היסטוריית השיחות מקובץ JSON מקומי
 HISTORY_FILE = "chat_history.json"
 
-def load_chat_history():
-    """טעינת היסטוריית ההודעות מקובץ JSON מקומי"""
+def load_all_sessions():
+    """טעינת כל השיחות מקובץ ה-JSON המקומי"""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
-    return []
+    return {}
 
-def save_chat_history(messages):
-    """שמירת היסטוריית ההודעות לקובץ JSON מקומי"""
-    try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(messages, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"שגיאה בשמירת היסטוריית השיחה: {e}")
+def save_session(session_id, messages):
+    """שמירת שיחה ספציפית לפי המזהה שלה בתוך קובץ ה-JSON"""
+    sessions = load_all_sessions()
+    if messages:  # נשמור רק אם יש הודעות בשיחה
+        # יצירת כותרת לשיחה לפי השאלה הראשונה
+        first_question = next((m["content"] for m in messages if m["role"] == "user"), "שיחה ללא שם")
+        sessions[session_id] = {
+            "title": first_question,
+            "messages": messages
+        }
+        try:
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(sessions, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            st.error(f"שגיאה בשמירת היסטוריית השיחה: {e}")
 
 # 4. מנגנון שליפת מקורות בזמן אמת מ-Sefaria API
 # הגדרת פונקציה המקבלת מחרוזת חיפוש ומחזירה מקורות מתוך ה-API של ספריא
@@ -325,72 +335,56 @@ st.title("📜 סוגיה בעיון")
 # הצגת כותרת משנה / תיאור קצר מתחת לכותרת
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר לספריא)")
 
-# אתחול רשימת ההודעות ב-session_state וטעינת היסטוריה מקובץ ה-JSON
-if "messages" not in st.session_state:
-    st.session_state.messages = load_chat_history()
+# בכל רענון דף חדש - מייצרים מזהה שיחה חדש ופותחים מסך נקי
+if "current_session_id" not in st.session_state:
+    st.session_state.current_session_id = str(uuid.uuid4())
+    st.session_state.messages = []
 
-# אתחול משתנה לסינון/קפיצה לשאלה שנבחרה
-if "selected_question_idx" not in st.session_state:
-    st.session_state.selected_question_idx = None
+# הצגת היסטוריית השיחות בסרגל הצידי (Sidebar)
+st.sidebar.title("💬 היסטוריית שיחות")
 
-# הצגת היסטוריית השאלות בסרגל הצידי (Sidebar)
-st.sidebar.title("💬 שאלות קודמות")
-
-# כפתור בסרגל הצד להצגת כל השיחה
-if st.sidebar.button("📜 הצג את כל השיחה"):
-    st.session_state.selected_question_idx = None
+# כפתור בסרגל הצד לפתיחת שיחה חדשה באופן יזום
+if st.sidebar.button("➕ שיחה חדשה"):
+    st.session_state.current_session_id = str(uuid.uuid4())
+    st.session_state.messages = []
     st.rerun()
 
-# כפתור בסרגל הצד למחיקת היסטוריית השיחה
-if st.sidebar.button("🗑️ מחיקת היסטוריית שיחה"):
+# כפתור בסרגל הצד למחיקת כל ההיסטוריה
+if st.sidebar.button("🗑️ מחיקת כל ההיסטוריה"):
+    st.session_state.current_session_id = str(uuid.uuid4())
     st.session_state.messages = []
-    st.session_state.selected_question_idx = None
     if os.path.exists(HISTORY_FILE):
         os.remove(HISTORY_FILE)
     st.rerun()
 
 st.sidebar.markdown("---")
 
-# חילוץ שאלות המשתמש והאינדקסים שלהן ברשימה
-user_question_indices = [idx for idx, msg in enumerate(st.session_state.messages) if msg["role"] == "user"]
+# טעינת כל השיחות מתוך קובץ ה-JSON לצורך הצגתן בסרגל הצד
+all_sessions = load_all_sessions()
 
-if user_question_indices:
-    for q_num, msg_idx in enumerate(user_question_indices, 1):
-        q_text = st.session_state.messages[msg_idx]["content"]
-        # קטימת הטקסט לתצוגה קצרה בסרגל הצד אם השאלה ארוכה
-        display_text = f"{q_num}. {q_text[:30]}..." if len(q_text) > 30 else f"{q_num}. {q_text}"
-        # יצירת כפתור לחיץ לכל שאלה לקפיצה ישירה אליה
-        if st.sidebar.button(display_text, key=f"q_btn_{msg_idx}"):
-            st.session_state.selected_question_idx = msg_idx
+if all_sessions:
+    st.sidebar.caption("שיחות קודמות:")
+    for s_id, s_data in all_sessions.items():
+        title = s_data.get("title", "שיחה ללא שם")
+        # קטימת הטיטל אם הוא ארוך מדי
+        display_title = title[:30] + "..." if len(title) > 30 else title
+        # לחיצה על שיחה בסרגל הצד תטען אותה למרכז המסך
+        if st.sidebar.button(display_title, key=f"session_{s_id}"):
+            st.session_state.current_session_id = s_id
+            st.session_state.messages = s_data.get("messages", [])
             st.rerun()
 else:
-    st.sidebar.info("עדיין לא נשאלו שאלות בשיחה זו.")
+    st.sidebar.info("אין שיחות קודמות שמורות.")
 
-# הצגת ההודעות: במידה ונבחרה שאלה מסוימת, נציג רק אותה ואת התשובה שלה. אחרת, נציג את כל ההיסטוריה.
-if st.session_state.selected_question_idx is not None:
-    selected_idx = st.session_state.selected_question_idx
-    # הצגת שאלת המשתמש שנבחרה
-    with st.chat_message("user"):
-        st.markdown(st.session_state.messages[selected_idx]["content"])
-    # הצגת תשובת ה-AI שמתחתיה (אם קיימת)
-    if selected_idx + 1 < len(st.session_state.messages):
-        with st.chat_message("assistant"):
-            st.markdown(st.session_state.messages[selected_idx + 1]["content"])
-else:
-    # לולאה המציגה את כל הודעות העבר השמורות ב-session_state בתוך רכיבי צ'אט
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+# הצגת הודעות השיחה הנוכחית במרכז המסך
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# קבלת קלט מהמשתמש מתוך תיבת הצ'אט (אם הוקלד טקסט)
+# קבלת קלט מהמשתמש מתוך תיבת הצ'אט
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    # איפוס הבחירה כדי להציג את השיחה המלאה כולל השאלה החדשה
-    st.session_state.selected_question_idx = None
-    
     # הוספת שאלת המשתמש לרשימת ההודעות ב-session_state
     st.session_state.messages.append({"role": "user", "content": prompt})
-    # שמירת השיחה בקובץ המקומי
-    save_chat_history(st.session_state.messages)
     
     # הצגת הודעת המשתמש בממשק הצ'אט
     with st.chat_message("user"):
@@ -408,7 +402,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
                 st.markdown(answer)
                 # שמירת תשובת העוזר ברשימת ההודעות ב-session_state
                 st.session_state.messages.append({"role": "assistant", "content": answer})
-                # שמירת השיחה בקובץ המקומי
-                save_chat_history(st.session_state.messages)
-                # רענון הממשק עדכון סרגל הצד באופן מיידי
+                # שמירת כל השיחה הנוכחית ב-JSON המקומי
+                save_session(st.session_state.current_session_id, st.session_state.messages)
+                # רענון הממשק
                 st.rerun()
