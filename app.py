@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import json
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -55,9 +56,48 @@ if not api_key:
 # הגדרת מפתח ה-API
 genai.configure(api_key=api_key)
 
+# 3. מנגנון שליפת מקורות מתוך מאגר ה-JSON (RAG Retrieval)
+def load_torah_database():
+    """טעינת מאגר הנתונים הסגור מתיקיית data"""
+    db_path = os.path.join("data", "torah_database.json")
+    if os.path.exists(db_path):
+        try:
+            with open(db_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            st.warning(f"אזהרה: לא ניתן לקרוא את מאגר הנתונים: {e}")
+    return []
+
+def retrieve_relevant_context(query: str, database: list) -> str:
+    """חיפוש ושליפת מקורות מתאימים מתוך המאגר הסגור לפי מילות מפתח"""
+    if not database:
+        return "לא נמצאו מקורות במאגר המקומי."
+    
+    matched_sources = []
+    query_words = set(query.split())
+    
+    for item in database:
+        content = item.get("content", "")
+        book = item.get("book", "")
+        # בדיקת התאמת מילים פשוטה
+        if any(word in content or word in book for word in query_words if len(word) > 2):
+            source_info = f"מקור: {book} "
+            if "masechet" in item:
+                source_info += f"מסכת {item['masechet']} דף {item['daf']} "
+            if "siman" in item:
+                source_info += f"סימן {item['siman']} סעיף {item['seif']} "
+            source_info += f"\nתוכן המקור: \"{content}\""
+            matched_sources.append(source_info)
+    
+    if matched_sources:
+        return "\n\n".join(matched_sources)
+    return "לא נמצאו מקורות ספציפיים במאגר המקומי לשאלה זו."
+
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
-תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה, ללא שגיאות או המצאות.
+תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
+
+חובה עליך להתבסס ראשית לכל על המקורות המצורפים מהמאגר הסגור! אסור להמציא ציטוטים, שמות ספרים או מקורות שלא קיימים.
 
 חובה עליך לבנות את התשובה לפי הסדר הלמדני הבא:
 
@@ -83,12 +123,24 @@ SYSTEM_PROMPT = """
 כללי שפה, דיוק ואיות (חובה):
 - ענה בעברית תקנית, רהוטה ומדויקת בלבד. אסור להמציא מילים, הטיות לא קיימות או מילים מומצאות!
 - הקפד על דקדוק ואיות ללא שגיאות כתיב.
-- אל תמציא ציטוטים, שמות ספרים או מקורות שלא קיימים. אם אינך בטוח במקור מדויק, ציין זאת מפורשות ואל תנחש.
+- אם אינך בטוח במקור מדויק, ציין זאת מפורשות ואל תנחש.
 - שמור על שפה תורנית, מכובדת ולמדנית.
 """
 
 def analyze_sugya(question: str):
     try:
+        # שליפת מקורות מתוך מאגר ה-JSON
+        database = load_torah_database()
+        retrieved_context = retrieve_relevant_context(question, database)
+        
+        # בניית הפרומפט המשולב עם המקורות שנשלפו (Grounding)
+        prompt_with_context = f"""
+מקורות שנשלפו מתוך המאגר התורני הסגור:
+{retrieved_context}
+
+שאלה לניתוח: {question}
+"""
+        
         # הגדרת פרמטרים מוקשחים למניעת המצאות ושגיאות כתיב
         generation_config = {
             "temperature": 0.0,
@@ -101,13 +153,13 @@ def analyze_sugya(question: str):
             system_instruction=SYSTEM_PROMPT,
             generation_config=generation_config
         )
-        response = model.generate_content(f"שאלה לניתוח: {question}")
+        response = model.generate_content(prompt_with_context)
         return response.text
     except Exception as e:
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 3. עיצוב הממשק
+# 4. עיצוב הממשק
 st.title("📜 סוגיה בעיון")
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות")
 
