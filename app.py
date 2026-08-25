@@ -97,7 +97,6 @@ def load_all_sessions():
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # וידוא שהתוכן הנטען הוא אמנם מילון ולא רשימה או סוג מידע אחר
                 if isinstance(data, dict):
                     return data
         except Exception:
@@ -107,7 +106,7 @@ def load_all_sessions():
 def save_session(session_id, messages):
     """שמירת שיחה ספציפית לפי המזהה שלה בתוך קובץ ה-JSON"""
     sessions = load_all_sessions()
-    if messages:  # נשמור רק אם יש הודעות בשיחה
+    if messages:
         first_question = next((m["content"] for m in messages if m["role"] == "user"), "שיחה ללא שם")
         sessions[session_id] = {
             "title": first_question,
@@ -251,8 +250,9 @@ def analyze_sugya(question: str):
             "top_p": 0.8,
         }
         
+        # התאמה לדגם העדכני של גוגל
         model = genai.GenerativeModel(
-            model_name='models/gemini-2.0-flash',
+            model_name='models/gemini-3.6-flash',
             system_instruction=SYSTEM_PROMPT,
             generation_config=generation_config
         )
@@ -267,7 +267,6 @@ def analyze_sugya(question: str):
 st.title("📜 סוגיה בעיון")
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר לספריא)")
 
-# בכל רענון דף חדש - מייצרים מזהה שיחה חדש ופותחים מסך נקי
 if "current_session_id" not in st.session_state:
     st.session_state.current_session_id = str(uuid.uuid4())
     st.session_state.messages = []
@@ -289,7 +288,6 @@ if st.sidebar.button("🗑️ מחיקת כל ההיסטוריה"):
 
 st.sidebar.markdown("---")
 
-# טעינת כל השיחות מתוך קובץ ה-JSON לצורך הצגתן בסרגל הצד
 all_sessions = load_all_sessions()
 
 if isinstance(all_sessions, dict) and all_sessions:
@@ -305,7 +303,6 @@ if isinstance(all_sessions, dict) and all_sessions:
 else:
     st.sidebar.info("אין שיחות קודמות שמורות.")
 
-# הצגת הודעות השיחה הנוכחית במרכז המסך
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
