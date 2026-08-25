@@ -54,16 +54,28 @@ SYSTEM_PROMPT = """
    - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
    - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
 
-כללי ברזל:
-- אל תמציא ציטוטים או מקורות שלא קיימים.
+כללי שפה, דיוק ואיות (חובה):
+- ענה בעברית תקנית, רהוטה ומדויקת בלבד. אסור להמציא מילים, הטיות לא קיימות או מילים מומצאות!
+- הקפד על דקדוק ואיות ללא שגיאות כתיב.
+- אל תמציא ציטוטים, שמות ספרים או מקורות שלא קיימים. אם אינך בטוח במקור מדויק, ציין זאת מפורשות ואל תנחש.
 - שמור על שפה תורנית, מכובדת ולמדנית.
 """
 
 def analyze_sugya(question: str):
     try:
-        # שימוש במודל gemini-3.6-flash הנדרש ע"י ה-API
-        model = genai.GenerativeModel('models/gemini-3.6-flash')
-        response = model.generate_content(f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}")
+        # הגדרת פרמטרים מוקשחים למניעת המצאות ושגיאות כתיב
+        generation_config = {
+            "temperature": 0.0,
+            "top_p": 0.8,
+        }
+        
+        # שימוש במודל gemini-3.6-flash עם הגדרות System Prompt ו-Temperature
+        model = genai.GenerativeModel(
+            model_name='models/gemini-3.6-flash',
+            system_instruction=SYSTEM_PROMPT,
+            generation_config=generation_config
+        )
+        response = model.generate_content(f"שאלה לניתוח: {question}")
         return response.text
     except Exception as e:
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
