@@ -1,37 +1,15 @@
-import streamlit as st
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
-# 1. הגדרות דף האינטרנט
-st.set_page_config(
-    page_title="סוגיה בעיון - AI תורני",
-    page_icon="📜",
-    layout="centered"
-)
-
-# 2. טעינת מפתח ה-API
+# 1. טעינת משתני סביבה מתוך קובץ .env
 load_dotenv()
 
-api_key = None
-
-if "GEMINI_API_KEY" in st.secrets:
-    api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
-elif "GOOGLE_API_KEY" in st.secrets:
-    api_key = str(st.secrets["GOOGLE_API_KEY"]).strip()
-else:
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-
-if not api_key:
-    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
-    st.stop()
-
-# הגדרת מפתח ה-API
-genai.configure(api_key=api_key)
-
+# 2. הגדרת ה-System Prompt התורני-למדני עם הנחיות דיוק ואיות מחמירות
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
-תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה, ללא שגיאות או המצאות.
+תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
 
 חובה עליך לבנות את התשובה לפי הסדר הלמדני הבא:
 
@@ -54,40 +32,65 @@ SYSTEM_PROMPT = """
    - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
    - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
 
-כללי ברזל:
-- אל תמציא ציטוטים או מקורות שלא קיימים.
+כללי שפה, דיוק ואיות (חובה):
+- ענה בעברית תקנית, רהוטה ומדויקת בלבד. אסור להמציא מילים, הטיות לא קיימות או מילים מומצאות!
+- הקפד על דקדוק ואיות ללא שגיאות כתיב.
+- אל תמציא ציטוטים, שמות ספרים או מקורות שלא קיימים. אם אינך בטוח במקור מדויק, ציין זאת מפורשות ואל תנחש.
 - שמור על שפה תורנית, מכובדת ולמדנית.
 """
 
+# 3. אתחול הלקוח של Google GenAI
+client = genai.Client()
+
 def analyze_sugya(question: str):
-    try:
-        # שימוש במודל gemini-3.6-flash הנדרש ע"י ה-API
-        model = genai.GenerativeModel('models/gemini-3.6-flash')
-        response = model.generate_content(f"{SYSTEM_PROMPT}\n\nשאלה לניתוח: {question}")
-        return response.text
-    except Exception as e:
-        st.error(f"שגיאה בהפעלת המודל: {str(e)}")
-        return None
+    """פונקציה לקבלת שאלה והרצת הניתוח הלמדני עם הגדרות דיוק מקסימליות"""
+    
+    # קונפיגורציה למניעת הזיות, שגיאות כתיב והמצאת מילים
+    config = types.GenerateContentConfig(
+        temperature=0.0,  # איפוס היצירתיות לקבלת פלט מדויק, עקבי ושמרני בלבד
+        top_p=0.8,        # סינון מילים חריגות או נדירות
+        system_instruction=SYSTEM_PROMPT
+    )
 
-# 3. עיצוב הממשק
-st.title("📜 סוגיה בעיון")
-st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות")
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=f"שאלה לניתוח: {question}",
+        config=config
+    )
+    return response.text
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+def run_interactive_chat():
+    """מנגנון צ'אט אינטראקטיבי בלולאה"""
+    print("==================================================")
+    print("         מנוע AI תורני - 'סוגיה בעיון'           ")
+    print("==================================================")
+    print("הקלד את השאלה התורנית/הלכתית שלך (או 'exit' ליציאה)\n")
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    while True:
+        try:
+            user_query = input("\nהכנס שאלה/סוגיה בעיון > ").strip()
+            
+            # תנאי יציאה מהלולאה
+            if user_query.lower() in ['exit', 'quit', 'יציאה']:
+                print("\nבשורות טובות! יציאה מהמערכת...")
+                break
+            
+            # בדיקה שהמשתמש לא שלח מחרוזת ריקה
+            if not user_query:
+                print("אנא הזן שאלה תקינה.")
+                continue
 
-if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+            print(f"\n--- מנתח את הסוגיה: '{user_query}' ---\n")
+            result = analyze_sugya(user_query)
+            
+            print(result)
+            print("\n" + "="*50)
 
-    with st.chat_message("assistant"):
-        with st.spinner("מנתח את הסוגיה במקורות..."):
-            answer = analyze_sugya(prompt)
-            if answer:
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+        except KeyboardInterrupt:
+            print("\n\nיציאה מהמערכת...")
+            break
+        except Exception as e:
+            print(f"\nארעה שגיאה: {e}\n")
+
+if __name__ == "__main__":
+    run_interactive_chat()
