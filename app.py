@@ -3,7 +3,7 @@ import streamlit as st  # ייבוא ספריית Streamlit לבניית ממש�
 import os  # ייבוא ספריית os לעבודה עם מערכת הקבצים ומשתני סביבה[cite: 1]
 import json  # ייבוא ספריית json לקריאה ועיבוד של קובצי נתונים מסוג JSON[cite: 1]
 import requests  # ייבוא ספריית requests לביצוע קריאות HTTP ל-API של ספריא[cite: 1]
-import re  # ייבוא ספריית re (Regular Expressions) לניקוי תגיות HTML באמצעות ביטויים רגולריים[cite: 1]
+import re  # ייבוא ספריית re (Regular Expressions) לניקוי תגיות HTML[cite: 1]
 from dotenv import load_dotenv  # ייבוא הפונקציה load_dotenv שטוענת משתני סביבה מקובץ .env[cite: 1]
 import google.generativeai as genai  # ייבוא הספרייה הרשמית של גוגל לתקשורת עם מודל ה-AI של Gemini[cite: 1]
 
@@ -18,7 +18,7 @@ st.set_page_config(  # הגדרת פרמטרים בסיסיים של העמוד 
 st.markdown(  # הזרקת קוד CSS מותאם אישית לתוך דף ה-Streamlit[cite: 1]
     """
     <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         direction: rtl !important;
         text-align: right !important;
     }
@@ -191,16 +191,10 @@ SYSTEM_PROMPT = """
 - ענה בעברית תקנית, רהוטה ותורנית בלבד.
 """  # הגדרת המחרוזת המכילה את כל הנחיות ה-System Prompt המפורטות[cite: 1]
 
-def analyze_sugya(question: str):  # הגדרת פונקציית הניתוח המרכזית הקוראת למודל ה-AI[cite: 1]
+def analyze_sugya(messages_history):  # הגדרת פונקציית הניתוח המקבלת את היסטוריית השיחה המלאה[cite: 1]
     try:  # פתיחת בלוק ניסיון להרצת הניתוח[cite: 1]
-        retrieved_context = retrieve_all_context(question)  # שליפת המקורות הרלוונטיים עבור השאלה[cite: 1]
-        
-        prompt_with_context = f"""
-מקורות מדויקים שנשלפו מספריא ומאגר הנתונים:
-{retrieved_context}
-
-שאלה לניתוח: {question}
-"""  # בניית הפרומפט המלא הכולל את המקורות שנשלפו ואת שאלת המשתמש[cite: 1]
+        last_prompt = messages_history[-1]["content"]  # חילוץ השאלה האחרונה שהזין המשתמש[cite: 1]
+        retrieved_context = retrieve_all_context(last_prompt)  # שליפת המקורות הרלוונטיים מספריא/המאגר המקומי עבור השאלה האחרונה[cite: 1]
         
         # Temperature 0.0 מונע אילתורים ומבטיח היצמדות מוחלטת לציטוטים ולניקוד[cite: 1]
         generation_config = {  # יצירת מילון ההגדרות ליצירת התוכן על ידי המודל[cite: 1]
@@ -213,24 +207,45 @@ def analyze_sugya(question: str):  # הגדרת פונקציית הניתוח ה
             system_instruction=SYSTEM_PROMPT,  # הזרקת ה-System Prompt שהוגדר לעיל[cite: 1]
             generation_config=generation_config  # הזרקת קונפיגורציית הטמפרטורה[cite: 1]
         )  # סגירת אתחול המודל[cite: 1]
-        response = model.generate_content(prompt_with_context)  # יצירת התשובה באמצעות שליחת הפרומפט למודל[cite: 1]
+
+        # המרת היסטוריית ההודעות מ-Streamlit לפורמט המתאים למודל Gemini[cite: 1]
+        formatted_history = []  # אתחול רשימת היסטוריית ההודעות המפורמטת[cite: 1]
+        for msg in messages_history[:-1]:  # מעבר על כל ההודעות הקודמות (ללא ההודעה האחרונה)[cite: 1]
+            role = "user" if msg["role"] == "user" else "model"  # תרגום התפקיד מ-Streamlit ל-Gemini (user/model)[cite: 1]
+            formatted_history.append({"role": role, "parts": [msg["content"]]})  # הוספת ההודעה בפורמט המתאים לרשימה[cite: 1]
+
+        # התחלת שיחה מתמשכת (Chat) עם ההיסטוריה המפורמטת[cite: 1]
+        chat = model.start_chat(history=formatted_history)  # פתיחת אובייקט שיחה במודל מבוסס היסטוריה[cite: 1]
+
+        # בניית הודעת הפנייה האחרונה בשילוב ההקשר שנשלף[cite: 1]
+        prompt_with_context = f"""
+מקורות מדויקים שנשלפו מספריא ומאגר הנתונים:
+{retrieved_context}
+
+שאלה לניתוח: {last_prompt}
+"""  # הרכבת הטקסט הסופי לשליחה למודל[cite: 1]
+
+        response = chat.send_message(prompt_with_context)  # שליחת ההודעה האחרונה וקבלת התשובה תוך שמירת הקשר השיחה[cite: 1]
         return response.text  # החזרת הטקסט של התשובה שיוצרה[cite: 1]
 
     except Exception as e:  # תפיסת שגיאות במהלך יצירת התשובה[cite: 1]
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")  # הצגת הודעת שגיאה במידת הצורך[cite: 1]
         return None  # החזרת ערך ריק במקרה שגיאה[cite: 1]
 
-# 7. עיצוב הממשק והרצת הצ'אט
+# 7. עיצוב הממשק והצגת היסטוריית הצ'אט
 st.title("📜 סוגיה בעיון")  # הצגת כותרת הראשית של האפליקציה בתוך הממשק[cite: 1]
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")  # הצגת כותרת משנה תיאורית[cite: 1]
 
-if "messages" not in st.session_state:  # בדיקה אם הסטוריית ההודעות עוד לא אותחלה ב-session_state[cite: 1]
+# אתחול היסטוריית ההודעות ב-st.session_state במידה ואינה קיימת עדיין[cite: 1]
+if "messages" not in st.session_state:  # בדיקה אם הסטוריית ההודעות עוד לא אותחלה[cite: 1]
     st.session_state.messages = []  # אתחול רשימה ריקה לשמירת הסטוריית השיחה[cite: 1]
 
+# הצגת כל הודעות הצ'אט הקודמות מתוך st.session_state[cite: 1]
 for message in st.session_state.messages:  # לולאה שעוברת על כל הודעה בהיסטוריה[cite: 1]
     with st.chat_message(message["role"]):  # פתיחת בלוק הודעת צ'אט לפי ה-role (user/assistant)[cite: 1]
         st.markdown(message["content"])  # הצגת תוכן ההודעה בפורמט Markdown[cite: 1]
 
+# קבלת קלט חדש מהמשתמש דרך תיבת הצ'אט[cite: 1]
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  # יצירת תיבת קלט למשתמש ובדיקה אם הוזנה שאלה[cite: 1]
     st.session_state.messages.append({"role": "user", "content": prompt})  # הוספת שאלת המשתמש להיסטוריה[cite: 1]
     with st.chat_message("user"):  # פתיחת בלוק הודעה עבור המשתמש[cite: 1]
@@ -238,7 +253,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
 
     with st.chat_message("assistant"):  # פתיחת בלוק הודעה עבור תשובת ה-AI[cite: 1]
         with st.spinner("שולף מקורות מדויקים ומנוקדים מספריא ומנתח את הסוגיה..."):  # הצגת הודעת טעינה מסתובבת[cite: 1]
-            answer = analyze_sugya(prompt)  # קריאה לפונקציית הניתוח לקבלת תשובת המודל[cite: 1]
+            answer = analyze_sugya(st.session_state.messages)  # קריאה לפונקציית הניתוח עם כל היסטוריית השיחה[cite: 1]
             if answer:  # בדיקה שהתקבלה תשובה תקינה[cite: 1]
                 st.markdown(answer)  # הצגת תשובת המודל במסך[cite: 1]
                 st.session_state.messages.append({"role": "assistant", "content": answer})  # הוספת התשובה להיסטוריית השיחה[cite: 1]
