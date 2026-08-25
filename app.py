@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 import json
-import re
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -93,44 +92,6 @@ def retrieve_relevant_context(query: str, database: list) -> str:
         return "\n\n".join(matched_sources)
     return "לא נמצאו מקורות ספציפיים במאגר המקומי לשאלה זו."
 
-# 4. שכבת אימות אוטומטית גמישה (Fuzzy Post-Processing Verification)
-def verify_response_quotes(response_text: str, database: list) -> str:
-    """סורקת ציטוטים במירכאות ומאמתת אותם מול מאגר ה-JSON לפי אחוז התאמת מילים"""
-    if not database:
-        return response_text
-
-    # חילוץ כל קטעי הטקסט המאומתים מהמאגר והפיכתם לסטים של מילים
-    verified_sources = [set(item.get("content", "").split()) for item in database]
-
-    # זיהוי ציטוטים בתגובה שנמצאים בתוך מירכאות ("...")
-    quotes = re.findall(r'"([^"]+)"', response_text)
-
-    for quote in quotes:
-        clean_quote_words = set(quote.strip().split())
-        
-        # בודק ציטוטים משמעותיים בלבד (מעל 3 מילים)
-        if len(clean_quote_words) >= 3:
-            is_valid = False
-            
-            for source_words in verified_sources:
-                if not source_words:
-                    continue
-                # חישוב אחוז המילים מהציטוט שקיימות במקור
-                intersection = clean_quote_words.intersection(source_words)
-                match_ratio = len(intersection) / len(clean_quote_words)
-                
-                # תנאי סף: אם 70% ומעלה מהמילים קיימות במקור – הציטוט תקני!
-                if match_ratio >= 0.7:
-                    is_valid = True
-                    break
-
-            if not is_valid:
-                # הוספת סימון אזהרה רק אם הציטוט רחוק מלהיות מדויק
-                warning = f'"{quote.strip()}" ⚠️ [הערה: ציטוט זה אינו מופיע בדיוק במאגר]'
-                response_text = response_text.replace(f'"{quote.strip()}"', warning)
-
-    return response_text
-
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
 תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
@@ -192,17 +153,13 @@ def analyze_sugya(question: str):
             generation_config=generation_config
         )
         response = model.generate_content(prompt_with_context)
-        raw_text = response.text
-
-        # הרצת שכבת האימות האוטומטית המעודכנת על התגובה
-        verified_text = verify_response_quotes(raw_text, database)
-        return verified_text
+        return response.text
 
     except Exception as e:
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 5. עיצוב הממשק
+# 4. עיצוב הממשק
 st.title("📜 סוגיה בעיון")
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות")
 
