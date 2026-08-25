@@ -11,7 +11,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# הוספת CSS ליישור מלא מימין לשמאל (RTL) לכל רכיבי האתר
+# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) של טקסט, כותרות ורשימות תבליטים
 st.markdown(
     """
     <style>
@@ -21,14 +21,34 @@ st.markdown(
         text-align: right !important;
     }
     
-    /* יישור הטרמינל/אזור הצ'אט, תיבות ההודעות והקלט */
+    /* יישור הצ'אט, התיבות והקלט */
     [data-testid="stChatMessage"], [data-testid="stChatInput"], div[data-baseweb="input"] {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* יישור כותרות, טקסט חופשי ופסקי דין */
+    /* יישור כותרות, טקסט חופשי ופסקאות */
     h1, h2, h3, h4, h5, h6, p, div, span, label {
+        direction: rtl !important;
+        text-align: right !important;
+    }
+
+    /* תיקון יישור רשימות ותבליטים (Bullets) מימין לשמאל */
+    ul, ol {
+        direction: rtl !important;
+        text-align: right !important;
+        padding-right: 1.5rem !important;
+        padding-left: 0rem !important;
+        margin-right: 0rem !important;
+    }
+
+    li {
+        direction: rtl !important;
+        text-align: right !important;
+    }
+
+    /* יישור תוכן Markdown פנימי */
+    .stMarkdownContainer, .stMarkdown {
         direction: rtl !important;
         text-align: right !important;
     }
