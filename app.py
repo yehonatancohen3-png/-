@@ -1,29 +1,21 @@
-# ייבוא ספריית streamlit לבניית ממשק ה-Web והצ'אט
-import streamlit as st
-# ייבוא ספריית os לעבודה עם מערכת הקבצים ונתיבים
-import os
-# ייבוא ספריית json לקריאה ופענוח של קבצי נתונים בפורמט JSON
-import json
-# ייבוא ספריית re לעבודה עם ביטויים רגולריים (Regular Expressions)
-import re
-# ייבוא ספריית requests לביצוע בקשות HTTP לרשת (כמו API של ספריא)
-import requests
-# ייבוא ספריית uuid ליצירת מזהים ייחודיים לכל שיחה
-import uuid
-# ייבוא הפונקציה load_dotenv מתוך dotenv לטעינת משתני סביבה מקובץ .env
-from dotenv import load_dotenv
-# ייבוא ספריית Google Generative AI לעבודה עם מודלי Gemini
-import google.generativeai as genai
+# 1. ייבוא ספריות נדרשות
+import streamlit as st  # ייבוא ספריית Streamlit לבניית ממשק המשתמש והצ'אט[cite: 1]
+import os  # ייבוא ספריית os לעבודה עם מערכת הקבצים ומשתני סביבה[cite: 1]
+import json  # ייבוא ספריית json לקריאה ועיבוד של קובצי נתונים מסוג JSON[cite: 1]
+import requests  # ייבוא ספריית requests לביצוע קריאות HTTP ל-API של ספריא[cite: 1]
+import re  # ייבוא ספריית re (Regular Expressions) לניקוי תגיות HTML באמצעות ביטויים רגולריים[cite: 1]
+from dotenv import load_dotenv  # ייבוא הפונקציה load_dotenv שטוענת משתני סביבה מקובץ .env[cite: 1]
+import google.generativeai as genai  # ייבוא הספרייה הרשמית של גוגל לתקשורת עם מודל ה-AI של Gemini[cite: 1]
 
-# 1. הגדרות דף האינטרנט
-st.set_page_config(
-    page_title="סוגיה בעיון - AI תורני",
-    page_icon="📜",
-    layout="centered"
-)
+# 2. הגדרות דף האינטרנט
+st.set_page_config(  # הגדרת פרמטרים בסיסיים של העמוד בדפדפן[cite: 1]
+    page_title="סוגיה בעיון - AI תורני",  # קביעת הכותרת שתופיע בתווית הלשונית של הדפדפן[cite: 1]
+    page_icon="📜",  # קביעת האייקון שיעמוד לצד כותרת הלשונית[cite: 1]
+    layout="centered"  # הגדרת פריסת העמוד להיות מרוכזת במרכז המסך[cite: 1]
+)  # סגירת סוגריים של הפונקציה set_page_config[cite: 1]
 
 # הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL)
-st.markdown(
+st.markdown(  # הזרקת קוד CSS מותאם אישית לתוך דף ה-Streamlit[cite: 1]
     """
     <style>
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
@@ -58,159 +50,121 @@ st.markdown(
         direction: rtl !important;
         text-align: right !important;
     }
-    
-    /* עיצוב כפתורי היסטוריה בסרגל הצד שייראו כמו קישורים/רשימה */
-    div[data-testid="stSidebar"] button {
-        text-align: right !important;
-        justify-content: flex-start !important;
-        width: 100% !important;
-    }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+    """,  # סיום מחרוזת ה-CSS הרב-שורתית[cite: 1]
+    unsafe_allow_html=True  # מאשר ל-Streamlit לרנדר את תגיות ה-HTML/CSS שהוכנסו[cite: 1]
+)  # סגירת הרצת ה-markdown[cite: 1]
 
-# 2. טעינת מפתח ה-API
-load_dotenv()
+# 3. טעינת מפתח ה-API
+load_dotenv()  # טעינת משתני הסביבה מתוך קובץ .env מקומי (אם קיים)[cite: 1]
 
-api_key = None
+api_key = None  # אתחול משתנה המפתח לערך ריק[cite: 1]
 
-if "GEMINI_API_KEY" in st.secrets:
-    api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
-elif "GOOGLE_API_KEY" in st.secrets:
-    api_key = str(st.secrets["GOOGLE_API_KEY"]).strip()
-else:
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if "GEMINI_API_KEY" in st.secrets:  # בדיקה אם המפתח מוגדר תחת GEMINI_API_KEY ב-Secrets של ענן Streamlit[cite: 1]
+    api_key = str(st.secrets["GEMINI_API_KEY"]).strip()  # שמירת המפתח כמחרוזת וניקוי רווחים מיותרים[cite: 1]
+elif "GOOGLE_API_KEY" in st.secrets:  # בדיקה חלופית אם המפתח מוגדר תחת GOOGLE_API_KEY ב-Secrets[cite: 1]
+    api_key = str(st.secrets["GOOGLE_API_KEY"]).strip()  # שמירת המפתח החלופי וניקוי רווחים[cite: 1]
+else:  # אם המפתח לא נמצא ב-Secrets[cite: 1]
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")  # ניסיון לשלוף את המפתח משתני הסביבה במערכת המקומית[cite: 1]
 
-if not api_key:
-    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
-    st.stop()
+if not api_key:  # בדיקה אם המפתח עדיין ריק (לא נמצא באף מקור)[cite: 1]
+    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")  # הצגת הודעת שגיאה אדומה למשתמש[cite: 1]
+    st.stop()  # עצירת הרצת האפליקציה במידה ואין מפתח תקף[cite: 1]
 
-genai.configure(api_key=api_key)
+genai.configure(api_key=api_key)  # הגדרת מפתח ה-API בספרייה הרשמית של גוגל[cite: 1]
 
-# 3. מנגנון לשמירה וטעינה של היסטוריית השיחות מקובץ JSON מקומי
-HISTORY_FILE = "chat_history.json"
-
-def load_all_sessions():
-    """טעינת כל השיחות מקובץ ה-JSON המקומי בבטחה"""
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return data
-        except Exception:
-            pass
-    return {}
-
-def save_session(session_id, messages):
-    """שמירת שיחה ספציפית לפי המזהה שלה בתוך קובץ ה-JSON"""
-    sessions = load_all_sessions()
-    if messages:
-        first_question = next((m["content"] for m in messages if m["role"] == "user"), "שיחה ללא שם")
-        sessions[session_id] = {
-            "title": first_question,
-            "messages": messages
-        }
-        try:
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                json.dump(sessions, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            st.error(f"שגיאה בשמירת היסטוריית השיחה: {e}")
-
-# 4. מנגנון שליפת מקורות בזמן אמת מ-Sefaria API
-def fetch_from_sefaria(query: str) -> str:
-    """חיפוש ושליפת מקורות מדויקים בעברית מתוך ספריא"""
-    try:
-        url = "https://www.sefaria.org/api/v2/search/text"
-        payload = {
-            "query": query,
-            "type": "text",
-            "field": "exact",
-            "size": 5
-        }
-        response = requests.post(url, json=payload, timeout=5)
+# 4. מנגנון שליפת מקורות מדויקים כולל ניקוד מ-Sefaria API
+def fetch_from_sefaria(query: str) -> str:  # הגדרת פונקציה המקבלת שאילתה ומחזירה מחרוזת עם המקורות[cite: 1]
+    """חיפוש ושליפת מקורות מדויקים בעברית (כולל ניקוד) מתוך ספריא"""  # תיעוד הפונקציה (Docstring)[cite: 1]
+    try:  # פתיחת בלוק ניסיון למניעת קריסות במקרה של שגיאת תקשורת[cite: 1]
+        url = "https://www.sefaria.org/api/v2/search/text"  # כתובת ה-Endpoint של מנוע החיפוש ב-API של ספריא[cite: 1]
+        payload = {  # יצירת המילון המכיל את הפרמטרים לשליחה בבקשה[cite: 1]
+            "query": query,  # מילת/משפט החיפוש שהוזנו[cite: 1]
+            "type": "text",  # הגדרת סוג החיפוש לטקסט[cite: 1]
+            "field": "exact",  # הגדרת שדה החיפוש להתאמה מדויקת[cite: 1]
+            "size": 5  # הגבלת מספר התוצאות המוחזרות ל-5 בלבד[cite: 1]
+        }  # סגירת מילון ה-payload[cite: 1]
+        response = requests.post(url, json=payload, timeout=5)  # שליחת בקשת POST ל-API עם מגבלת זמן של 5 שניות[cite: 1]
         
-        if response.status_code == 200:
-            data = response.json()
-            hits = data.get("hits", {}).get("hits", [])
+        if response.status_code == 200:  # בדיקה אם התקבלה תשובה תקינה מהשרת (קוד 200 OK)[cite: 1]
+            data = response.json()  # המרת תשובת ה-JSON המוחזרת למילון ב-Python[cite: 1]
+            hits = data.get("hits", {}).get("hits", [])  # חילוץ רשימת תוצאות החיפוש (hits) מתוך ה-JSON[cite: 1]
             
-            if not hits:
-                return "לא נמצאו מקורות תואמים בספריא."
+            if not hits:  # בדיקה אם רשימת התוצאות ריקה[cite: 1]
+                return "לא נמצאו מקורות תואמים בספריא."  # החזרת הודעה שלא נמצאו תוצאות[cite: 1]
             
-            results = []
-            for hit in hits:
-                source = hit.get("_source", {})
-                title = source.get("ref", "")
-                he_text = source.get("he", "")
+            results = []  # אתחול רשימה ריקה לאגרגציה של התוצאות המעובדות[cite: 1]
+            for hit in hits:  # לולאה המעבדת כל תוצאה בנפרד[cite: 1]
+                source = hit.get("_source", {})  # חילוץ אובייקט ה-source המכיל את פרטי המקור[cite: 1]
+                title = source.get("ref", "")  # חילוץ מראה המקום (למשל: "Shabbat 103a")[cite: 1]
+                he_text = source.get("he", "")  # חילוץ הטקסט בעברית[cite: 1]
                 
-                if isinstance(he_text, str) and he_text.strip():
-                    clean_text = re.sub(r'<[^>]+>', '', he_text)
-                    results.append(f"מקור מתוך ספריא ({title}):\n\"{clean_text}\"")
+                if isinstance(he_text, str) and he_text.strip():  # בדיקה שהטקסט הוא מחרוזת תקינה ואינו ריק[cite: 1]
+                    clean_text = re.sub(r'<[^>]+>', '', he_text)  # הסרת תגיות HTML בלבד ושמירה מלאה על הניקוד[cite: 1]
+                    results.append(f"מקור מתוך ספריא [{title}]:\n\"{clean_text}\"")  # הוספת המקור המעובד לרשימה[cite: 1]
             
-            if results:
-                return "\n\n".join(results)
+            if results:  # בדיקה אם נאספו תוצאות תקינות[cite: 1]
+                return "\n\n".join(results)  # חיבור כל התוצאות למחרוזת אחת המופרדת בשורות ריקות[cite: 1]
                 
-    except Exception as e:
-        return f"לא ניתן היה לשלוף מקורות מספריא: {str(e)}"
+    except Exception as e:  # תפיסת שגיאות במידה והתרחשה תקלה במהלך החיפוש[cite: 1]
+        return f"לא ניתן היה לשלוף מקורות מספריא: {str(e)}"  # החזרת הודעת השגיאה[cite: 1]
     
-    return "לא נמצאו מקורות ספציפיים בספריא."
+    return "לא נמצאו מקורות ספציפיים בספריא."  # החזרת ברירת מחדל אם לא התקבלו תוצאות[cite: 1]
 
 # 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
-def load_torah_database():
-    db_path = os.path.join("data", "torah_database.json")
-    if os.path.exists(db_path):
-        try:
-            with open(db_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return []
+def load_torah_database():  # הגדרת פונקציה לטעינת המאגר המקומי[cite: 1]
+    db_path = os.path.join("data", "torah_database.json")  # בניית הנתיב לקובץ ה-JSON המקומי בתיקיית data[cite: 1]
+    if os.path.exists(db_path):  # בדיקה אם קובץ המאגר המקומי קיים בדיסק[cite: 1]
+        try:  # ניסיון לקרוא את הקובץ[cite: 1]
+            with open(db_path, "r", encoding="utf-8") as f:  # פתיחת הקובץ לקריאה בקידוד UTF-8[cite: 1]
+                return json.load(f)  # טעינת והחזרת נתוני ה-JSON כרשימה/מילון[cite: 1]
+        except Exception:  # תפיסת שגיאות קריאה במידה וקיימות[cite: 1]
+            pass  # התעלמות משגיאה והמשך הלאה[cite: 1]
+    return []  # החזרת רשימה ריקה אם הקובץ לא קיים או שארעה שגיאה[cite: 1]
 
-def retrieve_all_context(query: str) -> str:
-    context_parts = []
+def retrieve_all_context(query: str) -> str:  # הגדרת פונקציה המאחדת מכלול מקורות מכל המאגרים[cite: 1]
+    context_parts = []  # אתחול רשימה לאיסוף חלקי ההקשר[cite: 1]
     
-    # 1. שליפה מספריא
-    sefaria_data = fetch_from_sefaria(query)
-    if "לא נמצאו" not in sefaria_data and "לא ניתן" not in sefaria_data:
-        context_parts.append(f"--- מקורות מדויקים מספריא ---\n{sefaria_data}")
+    # 1. שליפה מספריא (עם הניקוד המקורי)
+    sefaria_data = fetch_from_sefaria(query)  # קריאה לפונקציית השליפה מספריא[cite: 1]
+    if "לא נמצאו" not in sefaria_data and "לא ניתן" not in sefaria_data:  # בדיקה שנשלפו נתונים תקינים מספריא[cite: 1]
+        context_parts.append(f"--- מקורות מדויקים מספריא (כולל ניקוד) ---\n{sefaria_data}")  # הוספת הנתונים מספריא להקשר[cite: 1]
         
     # 2. שליפה מהמאגר המקומי (JSON)
-    database = load_torah_database()
-    query_words = [w for w in query.split() if len(w) > 2]
-    matched_local = []
+    database = load_torah_database()  # טעינת הנתונים מהמאגר המקומי[cite: 1]
+    query_words = [w for w in query.split() if len(w) > 2]  # פירוק השאילתה למילים באורך גדול מ-2 אותיות[cite: 1]
+    matched_local = []  # אתחול רשימה לתוצאות שנמצאו במאגר המקומי[cite: 1]
     
-    for item in database:
-        content = item.get("content", "")
-        book = item.get("book", "")
-        if any(word in content or word in book for word in query_words):
-            source_info = f"מקור מקומי: {book} "
-            if "masechet" in item:
-                source_info += f"מסכת {item['masechet']} דף {item['daf']} "
-            if "siman" in item:
-                source_info += f"סימן {item['siman']} סעיף {item['seif']} "
-            source_info += f"\nתוכן המקור: \"{content}\""
-            matched_local.append(source_info)
+    for item in database:  # לולאה שעוברת על כל פריט במאגר המקומי[cite: 1]
+        content = item.get("content", "")  # חילוץ תוכן הפריט[cite: 1]
+        book = item.get("book", "")  # חילוץ שם הספר[cite: 1]
+        if any(word in content or word in book for word in query_words):  # בדיקה אם מילה מהשאילתה מופיעה בתוכן או בשם הספר[cite: 1]
+            source_info = f"מקור מקומי: {book} "  # יצירת מחרוזת תיאור המקור[cite: 1]
+            if "masechet" in item:  # בדיקה אם קיימת שדה מסכת[cite: 1]
+                source_info += f"מסכת {item['masechet']} דף {item['daf']} "  # הוספת פרטי המסכת והדף[cite: 1]
+            if "siman" in item:  # בדיקה אם קיים שדה סימן[cite: 1]
+                source_info += f"סימן {item['siman']} סעיף {item['seif']} "  # הוספת פרטי הסימן והסעיף[cite: 1]
+            source_info += f"\nתוכן המקור: \"{content}\""  # הוספת תוכן המקור[cite: 1]
+            matched_local.append(source_info)  # הוספת הפריט המעובד לרשימת התוצאות המקומיות[cite: 1]
             
-    if matched_local:
-        context_parts.append(f"--- מקורות מהמאגר המקומי ---\n" + "\n\n".join(matched_local))
+    if matched_local:  # בדיקה אם נמצאו תוצאות במאגר המקומי[cite: 1]
+        context_parts.append(f"--- מקורות מהמאגר המקומי ---\n" + "\n\n".join(matched_local))  # הוספתן לחלקי ההקשר[cite: 1]
         
-    if context_parts:
-        return "\n\n".join(context_parts)
-    return "לא נמצאו מקורות במאגרי המידע הזמינים."
+    if context_parts:  # בדיקה אם נאסף הקשר כלשהו[cite: 1]
+        return "\n\n".join(context_parts)  # החזרת כל חלקי ההקשר מחוברים יחד[cite: 1]
+    return "לא נמצאו מקורות במאגרי המידע הזמינים."  # החזרת הודעת ברירת מחדל[cite: 1]
 
+# 6. System Prompt מוקשח לציטוט מילה במילה + ניקוד
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
 תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
 
-כללי שפה ודיוק (חובה):
-- ענה אך ורק בעברית תקנית, רהוטה ותורנית.
-- אסור בהחלט לשלב מילים בשפות זרות (ערבית, אנגלית וכו'). הקפד על ניסוח עברי נקי.
-
-כללי מקורות וציטוטים:
-1. במידה וצורפו מקורות מספריא או מהמאגר המקומי, התבסס עליהם וצטט אותם מילה במילה במירכאות ("...").
-2. במידה והמאגרים אינם מכילים את המקורות הנדרשים לסוגיה, עליך להביא מתוך הידע התורני שלך את המקורות המדויקים והמפורסמים (פסוקים, משניות, גמרות, ראשונים, שולחן ערוך ונושאי כלים) בציטוט מדויק ועם ציוני מקור מלאים.
-3. אסור להמציא מקורות, ציטוטים או שמות ספרים שלא קיימים!
+כללי ברזל לציטוט ומקורות (חובה מוחלטת):
+1. כאשר אתה מביא ציטוט מתוך המקורות שנשלפו מספריא או מהמאגר המקומי, חובה עליך להביא אותו מילה במילה בדיוק מוחלט כפי שהוא מופיע במקור!
+2. שמור על הניקוד המקורי כפי שנשלף מספריא. אל תוריד ניקוד, אל תשנה אותיות ואל תסדר מחדש את משפטי המקור.
+3. תחום כל ציטוט מדויק בתוך מירכאות ("...").
+4. ציין תמיד בצמוד לכל ציטוט את מראה המקום המדויק שלו בספריא.
+5. אסור להמציא מקורות, ציטוטים, ניקוד או שמות ספרים שלא קיימים!
 
 חובה עליך לבנות את התשובה לפי הסדר הלמדני הבא:
 
@@ -218,7 +172,7 @@ SYSTEM_PROMPT = """
    - פירוק השאלה למרכיבים ההלכתיים שלה.
 
 2. **יסוד הסוגיה במקורות (תנ"ך, משנה, גמרא):**
-   - הובאת המקורות המרכזיים בציטוט מילה במילה עם ציון מקור מדויק והסבר הסוגיה.
+   - הובאת המקורות המרכזיים בציטוט מילה במילה (כולל ניקוד אם קיים במקור) עם מראה מקום מדויק והסבר הסוגיה.
 
 3. **שיטות הראשונים (מחלוקות הסוגיה):**
    - הצגת השיטות השונות (רש"י, תוספות, רמב"ם, רמב"ן, רא"ש וכו') והסברת הסברה הלמדנית.
@@ -232,92 +186,59 @@ SYSTEM_PROMPT = """
 6. **מסקנה הלכתית למעשה:**
    - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
    - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
-"""
 
-def analyze_sugya(question: str):
-    try:
-        retrieved_context = retrieve_all_context(question)
+כללי שפה ודיוק:
+- ענה בעברית תקנית, רהוטה ותורנית בלבד.
+"""  # הגדרת המחרוזת המכילה את כל הנחיות ה-System Prompt המפורטות[cite: 1]
+
+def analyze_sugya(question: str):  # הגדרת פונקציית הניתוח המרכזית הקוראת למודל ה-AI[cite: 1]
+    try:  # פתיחת בלוק ניסיון להרצת הניתוח[cite: 1]
+        retrieved_context = retrieve_all_context(question)  # שליפת המקורות הרלוונטיים עבור השאלה[cite: 1]
         
         prompt_with_context = f"""
-מקורות שנשלפו מספריא ומאגר הנתונים:
+מקורות מדויקים שנשלפו מספריא ומאגר הנתונים:
 {retrieved_context}
 
 שאלה לניתוח: {question}
-"""
+"""  # בניית הפרומפט המלא הכולל את המקורות שנשלפו ואת שאלת המשתמש[cite: 1]
         
-        generation_config = {
-            "temperature": 0.1,
-            "top_p": 0.8,
-        }
+        # Temperature 0.0 מונע אילתורים ומבטיח היצמדות מוחלטת לציטוטים ולניקוד[cite: 1]
+        generation_config = {  # יצירת מילון ההגדרות ליצירת התוכן על ידי המודל[cite: 1]
+            "temperature": 0.0,  # קביעת טמפרטורה אפס למניעת הזיות ושמירה על דיוק מוחלט[cite: 1]
+            "top_p": 0.8,  # הגבלת סינון ההסתברויות לבחירת המילים[cite: 1]
+        }  # סגירת מילון ה-generation_config[cite: 1]
         
-        # התאמה לדגם העדכני של גוגל
-        model = genai.GenerativeModel(
-            model_name='models/gemini-3.6-flash',
-            system_instruction=SYSTEM_PROMPT,
-            generation_config=generation_config
-        )
-        response = model.generate_content(prompt_with_context)
-        return response.text
+        model = genai.GenerativeModel(  # אתחול אובייקט המודל של Gemini[cite: 1]
+            model_name='models/gemini-3.6-flash',  # הגדרת שם המודל הנדרש[cite: 1]
+            system_instruction=SYSTEM_PROMPT,  # הזרקת ה-System Prompt שהוגדר לעיל[cite: 1]
+            generation_config=generation_config  # הזרקת קונפיגורציית הטמפרטורה[cite: 1]
+        )  # סגירת אתחול המודל[cite: 1]
+        response = model.generate_content(prompt_with_context)  # יצירת התשובה באמצעות שליחת הפרומפט למודל[cite: 1]
+        return response.text  # החזרת הטקסט של התשובה שיוצרה[cite: 1]
 
-    except Exception as e:
-        st.error(f"שגיאה בהפעלת המודל: {str(e)}")
-        return None
+    except Exception as e:  # תפיסת שגיאות במהלך יצירת התשובה[cite: 1]
+        st.error(f"שגיאה בהפעלת המודל: {str(e)}")  # הצגת הודעת שגיאה במידת הצורך[cite: 1]
+        return None  # החזרת ערך ריק במקרה שגיאה[cite: 1]
 
-# 6. עיצוב הממשק
-st.title("📜 סוגיה בעיון")
-st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר לספריא)")
+# 7. עיצוב הממשק והרצת הצ'אט
+st.title("📜 סוגיה בעיון")  # הצגת כותרת הראשית של האפליקציה בתוך הממשק[cite: 1]
+st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")  # הצגת כותרת משנה תיאורית[cite: 1]
 
-if "current_session_id" not in st.session_state:
-    st.session_state.current_session_id = str(uuid.uuid4())
-    st.session_state.messages = []
+if "messages" not in st.session_state:  # בדיקה אם הסטוריית ההודעות עוד לא אותחלה ב-session_state[cite: 1]
+    st.session_state.messages = []  # אתחול רשימה ריקה לשמירת הסטוריית השיחה[cite: 1]
 
-# הצגת היסטוריית השיחות בסרגל הצידי (Sidebar)
-st.sidebar.title("💬 היסטוריית שיחות")
+for message in st.session_state.messages:  # לולאה שעוברת על כל הודעה בהיסטוריה[cite: 1]
+    with st.chat_message(message["role"]):  # פתיחת בלוק הודעת צ'אט לפי ה-role (user/assistant)[cite: 1]
+        st.markdown(message["content"])  # הצגת תוכן ההודעה בפורמט Markdown[cite: 1]
 
-if st.sidebar.button("➕ שיחה חדשה"):
-    st.session_state.current_session_id = str(uuid.uuid4())
-    st.session_state.messages = []
-    st.rerun()
+if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  # יצירת תיבת קלט למשתמש ובדיקה אם הוזנה שאלה[cite: 1]
+    st.session_state.messages.append({"role": "user", "content": prompt})  # הוספת שאלת המשתמש להיסטוריה[cite: 1]
+    with st.chat_message("user"):  # פתיחת בלוק הודעה עבור המשתמש[cite: 1]
+        st.markdown(prompt)  # הצגת שאלת המשתמש במסך[cite: 1]
 
-if st.sidebar.button("🗑️ מחיקת כל ההיסטוריה"):
-    st.session_state.current_session_id = str(uuid.uuid4())
-    st.session_state.messages = []
-    if os.path.exists(HISTORY_FILE):
-        os.remove(HISTORY_FILE)
-    st.rerun()
-
-st.sidebar.markdown("---")
-
-all_sessions = load_all_sessions()
-
-if isinstance(all_sessions, dict) and all_sessions:
-    st.sidebar.caption("שיחות קודמות:")
-    for s_id, s_data in all_sessions.items():
-        if isinstance(s_data, dict):
-            title = s_data.get("title", "שיחה ללא שם")
-            display_title = title[:30] + "..." if len(title) > 30 else title
-            if st.sidebar.button(display_title, key=f"session_{s_id}"):
-                st.session_state.current_session_id = s_id
-                st.session_state.messages = s_data.get("messages", [])
-                st.rerun()
-else:
-    st.sidebar.info("אין שיחות קודמות שמורות.")
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        with st.spinner("שולף מקורות מדויקים מספריא ומנתח את הסוגיה..."):
-            answer = analyze_sugya(prompt)
-            if answer:
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-                save_session(st.session_state.current_session_id, st.session_state.messages)
-                st.rerun()
+    with st.chat_message("assistant"):  # פתיחת בלוק הודעה עבור תשובת ה-AI[cite: 1]
+        with st.spinner("שולף מקורות מדויקים ומנוקדים מספריא ומנתח את הסוגיה..."):  # הצגת הודעת טעינה מסתובבת[cite: 1]
+            answer = analyze_sugya(prompt)  # קריאה לפונקציית הניתוח לקבלת תשובת המודל[cite: 1]
+            if answer:  # בדיקה שהתקבלה תשובה תקינה[cite: 1]
+                st.markdown(answer)  # הצגת תשובת המודל במסך[cite: 1]
+                st.session_state.messages.append({"role": "assistant", "content": answer})  # הוספת התשובה להיסטוריית השיחה[cite: 1]
