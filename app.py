@@ -2,7 +2,7 @@
 import streamlit as st
 # ייבוא ספריית os לעבודה עם מערכת הקבצים ונתיבים
 import os
-# ייבוא ספריית json לקריאה ופענוח שלקבצי נתונים בפורמט JSON
+# ייבוא ספריית json לקריאה ופענוח של קבצי נתונים בפורמט JSON
 import json
 # ייבוא ספריית re לעבודה עם ביטויים רגולריים (Regular Expressions)
 import re
@@ -90,7 +90,28 @@ if not api_key:
 # הגדרת מפתח ה-API בספריית Google Generative AI לתקשורת מול השרתים
 genai.configure(api_key=api_key)
 
-# 3. מנגנון שליפת מקורות בזמן אמת מ-Sefaria API
+# 3. מנגנון לשמירה וטעינה של היסטוריית השיחה מקובץ JSON מקומי
+HISTORY_FILE = "chat_history.json"
+
+def load_chat_history():
+    """טעינת היסטוריית ההודעות מקובץ JSON מקומי"""
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_chat_history(messages):
+    """שמירת היסטוריית ההודעות לקובץ JSON מקומי"""
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"שגיאה בשמירת היסטוריית השיחה: {e}")
+
+# 4. מנגנון שליפת מקורות בזמן אמת מ-Sefaria API
 # הגדרת פונקציה המקבלת מחרוזת חיפוש ומחזירה מקורות מתוך ה-API של ספריא
 def fetch_from_sefaria(query: str) -> str:
     """חיפוש ושליפת מקורות מדויקים בעברית מתוך ספריא"""
@@ -148,7 +169,7 @@ def fetch_from_sefaria(query: str) -> str:
     # במידה ולא נאספו תוצאות תקינות, החזרת מחרוזת ברירת מחדל
     return "לא נמצאו מקורות ספציפיים בספריא."
 
-# 4. מנגנון שליפה משולב (מאגר מקומי + ספריא)
+# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
 # הגדרת פונקציה לטעינת מאגר הנתונים המקומי מקובץ JSON
 def load_torah_database():
     # יצירת נתיב לקובץ torah_database.json בתוך תיקיית data
@@ -291,18 +312,26 @@ def analyze_sugya(question: str):
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 5. עיצוב הממשק
+# 6. עיצוב הממשק
 # הצגת כותרת ראשית בדף האתר
 st.title("📜 סוגיה בעיון")
 # הצגת כותרת משנה / תיאור קצר מתחת לכותרת
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר לספריא)")
 
-# אתחול רשימת ההודעות ב-session_state במידה והיא עדיין לא קיימת
+# אתחול רשימת ההודעות ב-session_state וטעינת היסטוריה מקובץ ה-JSON
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = load_chat_history()
 
 # הצגת היסטוריית השאלות בסרגל הצידי (Sidebar)
 st.sidebar.title("💬 שאלות קודמות")
+
+# כפתור בסרגל הצד למחיקת היסטוריית השיחה
+if st.sidebar.button("🗑️ מחיקת היסטוריית שיחה"):
+    st.session_state.messages = []
+    if os.path.exists(HISTORY_FILE):
+        os.remove(HISTORY_FILE)
+    st.rerun()
+
 user_questions = [msg["content"] for msg in st.session_state.messages if msg["role"] == "user"]
 
 if user_questions:
@@ -322,6 +351,9 @@ for message in st.session_state.messages:
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     # הוספת שאלת המשתמש לרשימת ההודעות ב-session_state
     st.session_state.messages.append({"role": "user", "content": prompt})
+    # שמירת השיחה בקובץ המקומי
+    save_chat_history(st.session_state.messages)
+    
     # הצגת הודעת המשתמש בממשק הצ'אט
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -338,5 +370,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
                 st.markdown(answer)
                 # שמירת תשובת העוזר ברשימת ההודעות ב-session_state
                 st.session_state.messages.append({"role": "assistant", "content": answer})
+                # שמירת השיחה בקובץ המקומי
+                save_chat_history(st.session_state.messages)
                 # רענון הממשק עדכון סרגל הצד באופן מיידי
                 st.rerun()
