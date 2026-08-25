@@ -58,6 +58,13 @@ st.markdown(
         direction: rtl !important;
         text-align: right !important;
     }
+    
+    /* עיצוב כפתורי היסטוריה בסרגל הצד שייראו כמו קישורים/רשימה */
+    div[data-testid="stSidebar"] button {
+        text-align: right !important;
+        justify-content: flex-start !important;
+        width: 100% !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -322,33 +329,64 @@ st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכ�
 if "messages" not in st.session_state:
     st.session_state.messages = load_chat_history()
 
+# אתחול משתנה לסינון/קפיצה לשאלה שנבחרה
+if "selected_question_idx" not in st.session_state:
+    st.session_state.selected_question_idx = None
+
 # הצגת היסטוריית השאלות בסרגל הצידי (Sidebar)
 st.sidebar.title("💬 שאלות קודמות")
+
+# כפתור בסרגל הצד להצגת כל השיחה
+if st.sidebar.button("📜 הצג את כל השיחה"):
+    st.session_state.selected_question_idx = None
+    st.rerun()
 
 # כפתור בסרגל הצד למחיקת היסטוריית השיחה
 if st.sidebar.button("🗑️ מחיקת היסטוריית שיחה"):
     st.session_state.messages = []
+    st.session_state.selected_question_idx = None
     if os.path.exists(HISTORY_FILE):
         os.remove(HISTORY_FILE)
     st.rerun()
 
-user_questions = [msg["content"] for msg in st.session_state.messages if msg["role"] == "user"]
+st.sidebar.markdown("---")
 
-if user_questions:
-    for idx, q in enumerate(user_questions, 1):
-        st.sidebar.markdown(f"**{idx}.** {q}")
+# חילוץ שאלות המשתמש והאינדקסים שלהן ברשימה
+user_question_indices = [idx for idx, msg in enumerate(st.session_state.messages) if msg["role"] == "user"]
+
+if user_question_indices:
+    for q_num, msg_idx in enumerate(user_question_indices, 1):
+        q_text = st.session_state.messages[msg_idx]["content"]
+        # קטימת הטקסט לתצוגה קצרה בסרגל הצד אם השאלה ארוכה
+        display_text = f"{q_num}. {q_text[:30]}..." if len(q_text) > 30 else f"{q_num}. {q_text}"
+        # יצירת כפתור לחיץ לכל שאלה לקפיצה ישירה אליה
+        if st.sidebar.button(display_text, key=f"q_btn_{msg_idx}"):
+            st.session_state.selected_question_idx = msg_idx
+            st.rerun()
 else:
     st.sidebar.info("עדיין לא נשאלו שאלות בשיחה זו.")
 
-# לולאה המציגה את כל הודעות העבר השמורות ב-session_state בתוך רכיבי צ'אט
-for message in st.session_state.messages:
-    # פתיחת בלוק הודעת צ'אט לפי התפקיד (user או assistant)
-    with st.chat_message(message["role"]):
-        # הצגת תוכן ההודעה בפורמט Markdown
-        st.markdown(message["content"])
+# הצגת ההודעות: במידה ונבחרה שאלה מסוימת, נציג רק אותה ואת התשובה שלה. אחרת, נציג את כל ההיסטוריה.
+if st.session_state.selected_question_idx is not None:
+    selected_idx = st.session_state.selected_question_idx
+    # הצגת שאלת המשתמש שנבחרה
+    with st.chat_message("user"):
+        st.markdown(st.session_state.messages[selected_idx]["content"])
+    # הצגת תשובת ה-AI שמתחתיה (אם קיימת)
+    if selected_idx + 1 < len(st.session_state.messages):
+        with st.chat_message("assistant"):
+            st.markdown(st.session_state.messages[selected_idx + 1]["content"])
+else:
+    # לולאה המציגה את כל הודעות העבר השמורות ב-session_state בתוך רכיבי צ'אט
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 # קבלת קלט מהמשתמש מתוך תיבת הצ'אט (אם הוקלד טקסט)
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
+    # איפוס הבחירה כדי להציג את השיחה המלאה כולל השאלה החדשה
+    st.session_state.selected_question_idx = None
+    
     # הוספת שאלת המשתמש לרשימת ההודעות ב-session_state
     st.session_state.messages.append({"role": "user", "content": prompt})
     # שמירת השיחה בקובץ המקומי
