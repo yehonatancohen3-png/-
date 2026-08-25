@@ -11,29 +11,25 @@ st.set_page_config(
     layout="centered"
 )
 
-# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) של טקסט, כותרות ורשימות תבליטים
+# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL)
 st.markdown(
     """
     <style>
-    /* יישור כללי של הדף, הגוף, והמיכלים המרכזיים */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
         direction: rtl !important;
         text-align: right !important;
     }
     
-    /* יישור הצ'אט, התיבות והקלט */
     [data-testid="stChatMessage"], [data-testid="stChatInput"], div[data-baseweb="input"] {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* יישור כותרות, טקסט חופשי ופסקאות */
     h1, h2, h3, h4, h5, h6, p, div, span, label {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* תיקון יישור רשימות ותבליטים (Bullets) מימין לשמאל */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
@@ -47,7 +43,6 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* יישור תוכן Markdown פנימי */
     .stMarkdownContainer, .stMarkdown {
         direction: rtl !important;
         text-align: right !important;
@@ -73,12 +68,10 @@ if not api_key:
     st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
     st.stop()
 
-# הגדרת מפתח ה-API
 genai.configure(api_key=api_key)
 
 # 3. מנגנון שליפת מקורות מתוך מאגר ה-JSON (RAG Retrieval)
 def load_torah_database():
-    """טעינת מאגר הנתונים הסגור מתיקיית data"""
     db_path = os.path.join("data", "torah_database.json")
     if os.path.exists(db_path):
         try:
@@ -89,23 +82,23 @@ def load_torah_database():
     return []
 
 def retrieve_relevant_context(query: str, database: list) -> str:
-    """חיפוש ושליפת מקורות מתאימים מתוך המאגר הסגור לפי מילות מפתח"""
     if not database:
-        return "לא נמצאו מקורות במאגר המקומי."
+        return "אין מקורות במאגר המקומי."
     
     matched_sources = []
-    query_words = set(query.split())
+    # חיפוש גמיש יותר לפי תת-מחרוזות
+    query_words = [w for w in query.split() if len(w) > 2]
     
     for item in database:
         content = item.get("content", "")
         book = item.get("book", "")
-        if any(word in content or word in book for word in query_words if len(word) > 2):
+        if any(word in content or word in book for word in query_words):
             source_info = f"מקור: {book} "
             if "masechet" in item:
                 source_info += f"מסכת {item['masechet']} דף {item['daf']} "
             if "siman" in item:
                 source_info += f"סימן {item['siman']} סעיף {item['seif']} "
-            source_info += f"\nתוכן המקור מדויק: \"{content}\""
+            source_info += f"\nתוכן המקור: \"{content}\""
             matched_sources.append(source_info)
     
     if matched_sources:
@@ -116,33 +109,31 @@ SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
 תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
 
-כללי שפה ואיסור חמור על שפות זרות:
+כללי שפה ודיוק (חובה):
 - ענה אך ורק בעברית תקנית, רהוטה ותורנית.
-- אסור בהחלט לשלב מילים בשפה הערבית (כמו המילה "هل"), אנגלית או כל שפה אחרת!
-- הקפד על דקדוק, ניסוח תורני מובהק ואיות ללא שגיאות.
+- אסור בהחלט לשלב מילים בשפות זרות (ערבית, אנגלית וכו'). הקפד על ניסוח עברי נקי.
 
-כללי ברזל לציטוט ומקורות:
-1. חובה עליך להתבסס ראשית לכל על המקורות המצורפים מהמאגר הסגור!
-2. כאשר אתה מביא ציטוט מתוך המקורות שנשלפו, חובה עליך להביא אותו מילה במילה בדיוק כפי שהוא מופיע במקור, ולתחום אותו בתוך מירכאות ("...").
-3. אסור בהחלט לנסח מחדש, לשנות מילים או להמציא ציטוטים ושמות ספרים שלא קיימים במאגר או במסורת ההלכתית המאושרת.
-4. במידה וציטטת מקור, ציין תמיד בצמוד אליו את מקורו המדויק (שם הספר, מסכת/סימן/סעיף).
+כללי מקורות וציטוטים:
+1. במידה וצורפו מקורות מהמאגר המקומי, התבסס עליהם וצטט אותם מילה במילה במירכאות ("...").
+2. במידה והמאגר המקומי אינו מכיל את המקורות הנדרשים לסוגיה, עליך להביא מתוך הידע התורני שלך את המקורות המדויקים והמפורסמים (פסוקים, משניות, גמרות, ראשונים, שולחן ערוך ונושאי כלים) בציטוט מדויק ועם ציוני מקור מלאים (שם הספר, מסכת/סימן/סעיף).
+3. אסור להמציא מקורות, ציטוטים או שמות ספרים שלא קיימים!
 
 חובה עליך לבנות את התשובה לפי הסדר הלמדני הבא:
 
 1. **הגדרת המקרה והשאלה:**
-   - פירוק השאלה למרכיבים ההלכתיים שלה (לדוגמה: איסור דאורייתא/דרבנן, ספק, גרמא, כבוד הבריות וכדומה).
+   - פירוק השאלה למרכיבים ההלכתיים שלה (לדוגמה: מוחזקות, ספק ממון, תקפו כהן, המוציא מחברו עליו הראיה וכדומה).
 
 2. **יסוד הסוגיה במקורות (תנ"ך, משנה, גמרא):**
-   - הובאת המקורות המרכזיים בציטוט מדויק מילה במילה עם הסבר מדויק של הנדון.
+   - הובאת המקורות המרכזיים בציטוט מילה במילה עם ציון מקור מדויק והסבר הסוגיה.
 
 3. **שיטות הראשונים (מחלוקות הסוגיה):**
-   - הצגת השיטות השונות (רש"י, תוספות, רמב"ם, רמב"ן, רא"ש וכו') והסברת הסברה של כל שיטה.
+   - הצגת השיטות השונות (רש"י, תוספות, רמב"ם, רמב"ן, רא"ש וכו') והסברת הסברה הלמדנית של כל שיטה.
 
 4. **פסיקת השולחן ערוך והנושאי כלים:**
-   - הצגת פסק המחבר (רבי יוסף קארו) והרמ"א בציטוטים מדויקים, ודברי נושאי הכלים המרכזיים.
+   - הצגת פסק המחבר והרמ"א, ודברי נושאי הכלים המרכזיים (ש"ך, ט"ז, משנה ברורה וכדומה).
 
 5. **שו"תים ופוסקי זמננו (אקטואליה והיקש הלכתי):**
-   - דיון בפסיקות המאה 20-21. במידה ומדובר בשאלה חדשה (טכנולוגיה, רפואה), עשה "דימוי מילתא למילתא" והסבר מאיזה יסוד עתיק נלמד המקרה החדש.
+   - דיון בפסיקות מאוחרות והשלכות למעשה.
 
 6. **מסקנה הלכתית למעשה:**
    - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
@@ -151,25 +142,21 @@ SYSTEM_PROMPT = """
 
 def analyze_sugya(question: str):
     try:
-        # שליפת מקורות מתוך מאגר ה-JSON
         database = load_torah_database()
         retrieved_context = retrieve_relevant_context(question, database)
         
-        # בניית הפרומפט המשולב עם המקורות שנשלפו (Grounding)
         prompt_with_context = f"""
-מקורות אמינים שנשלפו מתוך המאגר התורני הסגור:
+מקורות שנשלפו מתוך המאגר המקומי:
 {retrieved_context}
 
 שאלה לניתוח: {question}
 """
         
-        # הגדרת פרמטרים מוקשחים למניעת המצאות וסטיות בשפה (Temperature 0.0)
         generation_config = {
-            "temperature": 0.0,
+            "temperature": 0.1,  # טמפרטורה נמוכה המאפשרת שליפת מקורות אמינים תוך שמירה על דיוק
             "top_p": 0.8,
         }
         
-        # שימוש במודל gemini-3.6-flash עם הגדרות System Prompt ו-Temperature
         model = genai.GenerativeModel(
             model_name='models/gemini-3.6-flash',
             system_instruction=SYSTEM_PROMPT,
