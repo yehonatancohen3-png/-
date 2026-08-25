@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import json
+import re
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -79,7 +80,6 @@ def retrieve_relevant_context(query: str, database: list) -> str:
     for item in database:
         content = item.get("content", "")
         book = item.get("book", "")
-        # בדיקת התאמת מילים פשוטה
         if any(word in content or word in book for word in query_words if len(word) > 2):
             source_info = f"מקור: {book} "
             if "masechet" in item:
@@ -92,6 +92,30 @@ def retrieve_relevant_context(query: str, database: list) -> str:
     if matched_sources:
         return "\n\n".join(matched_sources)
     return "לא נמצאו מקורות ספציפיים במאגר המקומי לשאלה זו."
+
+# 4. שכבת אימות אוטומטית (Post-Processing Verification)
+def verify_response_quotes(response_text: str, database: list) -> str:
+    """סורקת ציטוטים במירכאות ומאמתת אותם מול מאגר ה-JSON הסגור"""
+    if not database:
+        return response_text
+
+    # חילוץ כל קטעי הטקסט המאומתים מהמאגר
+    verified_contents = [item.get("content", "").strip() for item in database]
+
+    # זיהוי ציטוטים בתגובה שנמצאים בתוך מירכאות ("...")
+    quotes = re.findall(r'"([^"]+)"', response_text)
+
+    for quote in quotes:
+        clean_quote = quote.strip()
+        # בודק ציטוטים משמעותיים בלבד (מעל 3 מילים)
+        if len(clean_quote.split()) >= 3:
+            is_valid = any(clean_quote in content for content in verified_contents)
+            if not is_valid:
+                # הוספת סימון אזהרה לצד ציטוט שלא נמצא במאגר הסגור
+                warning = f'"{clean_quote}" ⚠️ [הערת מערכת: ציטוט זה אינו מופיע מילה-במילה במאגר המאושר]'
+                response_text = response_text.replace(f'"{clean_quote}"', warning)
+
+    return response_text
 
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
@@ -154,12 +178,17 @@ def analyze_sugya(question: str):
             generation_config=generation_config
         )
         response = model.generate_content(prompt_with_context)
-        return response.text
+        raw_text = response.text
+
+        # הרצת שכבת האימות האוטומטית על התגובה
+        verified_text = verify_response_quotes(raw_text, database)
+        return verified_text
+
     except Exception as e:
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 4. עיצוב הממשק
+# 5. עיצוב הממשק
 st.title("📜 סוגיה בעיון")
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות")
 
