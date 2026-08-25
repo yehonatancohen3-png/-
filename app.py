@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import json
+import re
 import requests
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -75,7 +76,7 @@ genai.configure(api_key=api_key)
 def fetch_from_sefaria(query: str) -> str:
     """חיפוש ושליפת מקורות מדויקים בעברית מתוך ספריא"""
     try:
-        url = f"https://www.sefaria.org/api/v2/search/text"
+        url = "https://www.sefaria.org/api/v2/search/text"
         payload = {
             "query": query,
             "type": "text",
@@ -117,7 +118,7 @@ def load_torah_database():
         try:
             with open(db_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception as e:
+        except Exception:
             pass
     return []
 
@@ -147,7 +148,7 @@ def retrieve_all_context(query: str) -> str:
             matched_local.append(source_info)
             
     if matched_local:
-        context_parts.append(f"--- מקורות מהמאגר המקומי ---\n" + "\n\n".join(matched_local))
+        context_parts.append("--- מקורות מהמאגר המקומי ---\n" + "\n\n".join(matched_local))
         
     if context_parts:
         return "\n\n".join(context_parts)
@@ -188,16 +189,13 @@ SYSTEM_PROMPT = """
    - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
 """
 
-def analyze_sugya(question: str):
+def analyze_sugya(messages_history):
     try:
-        retrieved_context = retrieve_all_context(question)
+        # 1. שליפת השאלה האחרונה מתוך ההיסטוריה
+        last_question = messages_history[-1]["content"]
         
-        prompt_with_context = f"""
-מקורות שנשלפו מספריא ומאגר הנתונים:
-{retrieved_context}
-
-שאלה לניתוח: {question}
-"""
+        # 2. שליפת המקורות הרלוונטיים עבור השאלה הזו
+        retrieved_context = retrieve_all_context(last_question)
         
         generation_config = {
             "temperature": 0.1,
@@ -209,7 +207,23 @@ def analyze_sugya(question: str):
             system_instruction=SYSTEM_PROMPT,
             generation_config=generation_config
         )
-        response = model.generate_content(prompt_with_context)
+        
+        # 3. המרת כל ההודעות הקודמות לפורמט של Gemini Chat History
+        formatted_history = []
+        for msg in messages_history[:-1]:
+            role = "user" if msg["role"] == "user" else "model"
+            formatted_history.append({"role": role, "parts": [msg["content"]]})
+            
+        # 4. יצירת סשן שיחה מתמשך ושליחת ההודעה עם המקורות שנשלפו
+        chat = model.start_chat(history=formatted_history)
+        
+        prompt_with_context = f"""
+מקורות שנשלפו מספריא ומאגר הנתונים עבור השאלה הנוכחית:
+{retrieved_context}
+
+שאלה לניתוח: {last_question}
+"""
+        response = chat.send_message(prompt_with_context)
         return response.text
 
     except Exception as e:
@@ -234,7 +248,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
 
     with st.chat_message("assistant"):
         with st.spinner("שולף מקורות מדויקים מספריא ומנתח את הסוגיה..."):
-            answer = analyze_sugya(prompt)
+            answer = analyze_sugya(st.session_state.messages)
             if answer:
                 st.markdown(answer)
                 st.session_state.messages.append({"role": "assistant", "content": answer})
