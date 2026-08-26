@@ -5,6 +5,7 @@ import json
 import requests
 import re
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -20,7 +21,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
         direction: rtl !important;
         text-align: right !important;
     }
@@ -235,24 +236,75 @@ def analyze_sugya(messages_history):
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 7. עיצוב הממשק והצגת היסטוריית הצ'אט
+# 7. ניהול היסטוריית השיחות ב-session_state
+if "chats" not in st.session_state:
+    st.session_state.chats = {}  # מילון של כל השיחות: {chat_id: {"title": ..., "messages": [...]}}
+
+if "current_chat_id" not in st.session_state:
+    # יצירת שיחה ראשונית בדיפולט
+    new_id = str(uuid.uuid4())
+    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
+    st.session_state.current_chat_id = new_id
+
+# פונקציות עזר לניהול שיחות
+def create_new_chat():
+    new_id = str(uuid.uuid4())
+    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
+    st.session_state.current_chat_id = new_id
+
+def delete_chat(chat_id):
+    if chat_id in st.session_state.chats:
+        del st.session_state.chats[chat_id]
+    if not st.session_state.chats:
+        create_new_chat()
+    else:
+        st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
+
+# 8. סרגל צד (Sidebar) להצגת היסטוריית השיחות
+with st.sidebar:
+    st.title("📜 היסטוריית שיחות")
+    if st.button("➕ שיחה חדשה", use_container_width=True):
+        create_new_chat()
+        st.rerun()
+
+    st.markdown("---")
+
+    for c_id, c_data in list(st.session_state.chats.items()):
+        col1, col2 = st.columns([0.8, 0.2])
+        is_active = (c_id == st.session_state.current_chat_id)
+        btn_label = f"💬 {c_data['title']}"
+        
+        with col1:
+            if st.button(btn_label, key=f"select_{c_id}", use_container_width=True, type="primary" if is_active else "secondary"):
+                st.session_state.current_chat_id = c_id
+                st.rerun()
+        with col2:
+            if st.button("🗑️", key=f"del_{c_id}"):
+                delete_chat(c_id)
+                st.rerun()
+
+# 9. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+current_chat = st.session_state.chats[st.session_state.current_chat_id]
 
-for message in st.session_state.messages:
+# הצגת כל הודעות הצ'אט של השיחה הנוכחית
+for message in current_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # עדכון כותרת השיחה לפי השאלה הראשונה
+    if not current_chat["messages"]:
+        current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
+
+    current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        status_placeholder = st.empty()  # יצירת מכולה דינמית
+        status_placeholder = st.empty()
 
         messages_list = [
             "יהונתן חושב...",
@@ -264,23 +316,23 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
             "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
         ]
 
-        # הרצת חישוב התשובה ברקע כדי לאפשר להודעות להתחלף בלופ
+        # הרצת חישוב התשובה ברקע
         with ThreadPoolExecutor() as executor:
-            future = executor.submit(analyze_sugya, st.session_state.messages)
+            future = executor.submit(analyze_sugya, current_chat["messages"])
             
             idx = 0
             while not future.done():
                 current_msg = messages_list[idx % len(messages_list)]
                 status_placeholder.info(f"⏳ {current_msg}")
-                time.sleep(2.5)  # עדכון ההודעה כל 2.5 שניות
+                time.sleep(2.5)
                 idx += 1
             
             answer = future.result()
 
-        status_placeholder.empty()  # ניקוי הודעת הטעינה בגמר העיבוד
+        status_placeholder.empty()
 
         if answer:
             st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            current_chat["messages"].append({"role": "assistant", "content": answer})
         else:
             st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")
