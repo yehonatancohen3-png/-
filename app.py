@@ -17,7 +17,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) ותמיכה בעיצוב נקי
+# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) وتמיכה בעיצוב נקי
 st.markdown(
     """
     <style>
@@ -49,7 +49,6 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* ביטול מניעת תפריט הקשר למקש ימני בסרגל הצד כדי לאפשר זיהוי מקש ימני למחיקה */
     [data-testid="stSidebar"] button {
         user-select: none;
         -webkit-user-select: none;
@@ -168,47 +167,86 @@ def retrieve_all_context(query: str) -> str:
         return "\n\n".join(context_parts)
     return "לא נמצאו מקורות במאגרי המידע הזמינים."
 
-# 6. System Prompt מוקשח
-SYSTEM_PROMPT = """
-אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
-תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
-
+# 6. יצירת System Prompt דינמי לפי סגנון הנבחר
+def get_system_prompt(style_mode: str) -> str:
+    base_rules = """
 כללי ברזל לציטוט ומקורות (חובה מוחלטת):
 1. כאשר אתה מביא ציטוט מתוך המקורות שנשלפו מספריא או מהמאגר המקומי, חובה עליך להביא אותו מילה במילה בדיוק מוחלט כפי שהוא מופיע במקור!
 2. שמור על הניקוד המקורי כפי שנשלף מספריא. אל תוריד ניקוד, אל תשנה אותיות ואל תסדר מחדש את משפטי המקור.
 3. תחום כל ציטוט מדויק בתוך מירכאות ("...").
 4. ציין תמיד בצמוד לכל ציטוט את מראה המקום המדויק שלו בספריא.
 5. אסור להמציא מקורות, ציטוטים, ניקוד או שמות ספרים שלא קיימים!
+"""
+
+    if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":
+        return f"""
+אתה מודול AI תורני מומחה, המנתח סוגיות בסגנון ישיבתי-למדני עמוק ("סוגיה בעיון") בדומה לתשובות שו"ת למדניות.
+תפקידך להציג ניתוח יסודי, מעמיק ומחודד, תוך דגש על סברות, קושיות, תירוצים, חילוקים בין שיטות וגדרים הלכתיים.
+
+{base_rules}
 
 חובה עליך לבנות את התשובה לפי הסדר הלמדני הבא:
 
-1. **הגדרת המקרה והשאלה:**
-   - פירוק השאלה למרכיבים ההלכתיים שלה.
+1. **הגדרת הסוגיה והנידון:**
+   - פירוק הגדרים ההלכתיים והסתפקות הדין.
 
-2. **יסוד הסוגיה במקורות (תנ"ך, משנה, גמרא):**
-   - הובאת המקורות המרכזיים בציטוט מילה במילה (כולל ניקוד אם קיים במקור) עם מראה מקום מדויק והסבר הסוגיה.
+2. **יסוד הסוגיה במקורות (גמרא וסוגיות מקבילות):**
+   - הובאת המקורות המרכזיים בציטוט מילה במילה (כולל ניקוד אם קיים במקור) עם מראה מקום מדויק והסבר מהלך הגמרא.
 
-3. **שיטות הראשונים (מחלוקות הסוגיה):**
-   - הצגת השיטות השונות (רש"י, תוספות, רמב"ם, רמב"ן, רא"ש וכו') והסברת הסברה הלמדנית.
+3. **שיטות הראשונים והגדרת הסברות:**
+   - הצגת השיטות השונות (רש"י, תוספות, רמב"ם, רמב"ן, רא"ש וכו'), עמידה על החילוקים ביניהם והגדרת ה"חקירה" או הסברה הלמדנית.
 
 4. **פסיקת השולחן ערוך והנושאי כלים:**
-   - הצגת פסק המחבר והרמ"א, ודברי נושאי הכלים המרכזיים.
+   - דיוק בלשון המחבר והרמ"א, ודברי נושאי הכלים (ש"ך, ט"ז, פתחי תשובה וכו').
 
-5. **שו"תים ופוסקי זמננו (אקטואליה והיקש הלכתי):**
-   - דיון בפסיקות מאוחרות והשלכות למעשה.
+5. **שו"תים ופוסקי זמננו:**
+   - הובאת תשובות אחרונים ופוסקי זמננו, היקשים למקרים אקטואליים והעמקה בסברות הפוסקים.
+
+6. **סדר הדין ומסקנה להלכה:**
+   - סיכום הדין להלכה ולמעשה לפי מנהג ספרד ואשכנז.
+   - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
+
+כללי שפה:
+- ענה בשפה תורנית-ישיבתית גבוהה, תוך שימוש במושגים למדניים מקובלים.
+"""
+    else:  # סגנון פשוט ומונגש
+        return f"""
+אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות ומחשבתיות בשפה ברורה, מופשטת ונגישה לכל לומד.
+תפקידך להציג ניתוח בהיר ומסודר מפי המקורות ועד לפסיקת ההלכה למעשה.
+
+{base_rules}
+
+חובה עליך לבנות את התשובה לפי הסדר הבא:
+
+1. **הגדרת המקרה והשאלה:**
+   - הסבר פשוט וברור של השאלה והרקע שלה.
+
+2. **יסוד הסוגיה במקורות (תנ"ך, משנה, גמרא):**
+   - הובאת המקורות המרכזיים בציטוט מילה במילה (כולל ניקוד אם קיים במקור) עם מראה מקום מדויק והסבר בשפה קלה.
+
+3. **שיטות הראשונים (מחלוקות הסוגיה):**
+   - הצגת השיטות השונות בשפה פשוטה והסברת מוקד המחלוקת.
+
+4. **פסיקת השולחן ערוך והרמ"א:**
+   - הצגת הפסק בשולחן ערוך וברמ"א.
+
+5. **פוסקי זמננו (אקטואליה):**
+   - דיון קצר בפסיקות של פוסקי זמננו הנוגעות לימינו.
 
 6. **מסקנה הלכתית למעשה:**
    - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
    - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
 
-כללי שפה ודיוק:
-- ענה בעברית תקנית, רהוטה ותורנית בלבד.
+כללי שפה:
+- ענה בעברית תקנית, הירה ורהוטה, בצורה נגישה וקל להבנה.
 """
 
-def analyze_sugya(messages_history):
+def analyze_sugya(messages_history, style_mode):
     try:
         last_prompt = messages_history[-1]["content"]
         retrieved_context = retrieve_all_context(last_prompt)
+        
+        system_prompt = get_system_prompt(style_mode)
         
         generation_config = {
             "temperature": 0.0,
@@ -217,7 +255,7 @@ def analyze_sugya(messages_history):
         
         model = genai.GenerativeModel(
             model_name='models/gemini-3.6-flash',
-            system_instruction=SYSTEM_PROMPT,
+            system_instruction=system_prompt,
             generation_config=generation_config
         )
 
@@ -244,78 +282,69 @@ def analyze_sugya(messages_history):
 
 # 7. ניהול היסטוריית השיחות ב-session_state
 if "chats" not in st.session_state:
-    st.session_state.chats = {}  # מילון השיחות
+    st.session_state.chats = {}
 
 if "current_chat_id" not in st.session_state:
     new_id = str(uuid.uuid4())
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
     st.session_state.current_chat_id = new_id
 
-if "delete_target_id" in st.session_state:
-    target_id = st.session_state.pop("delete_target_id")
-    if target_id in st.session_state.chats:
-        del st.session_state.chats[target_id]
-        if not st.session_state.chats:
-            new_id = str(uuid.uuid4())
-            st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
-            st.session_state.current_chat_id = new_id
-        else:
-            st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
-
 def create_new_chat():
     current_chat = st.session_state.chats.get(st.session_state.current_chat_id)
-    # יצירת שיחה חדשה רק במידה והשיחה הנוכחית איננה ריקה
     if current_chat and not current_chat["messages"]:
-        return  # אנחנו כבר בשיחה חדשה וריקה
+        return
     new_id = str(uuid.uuid4())
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
     st.session_state.current_chat_id = new_id
 
-# 8. סרגל צד (Sidebar) להצגת היסטוריית השיחות
+# 8. סרגל צד (Sidebar)
 with st.sidebar:
+    st.title("⚙️ הגדרות וסגנון")
+    
+    # בחירת סגנון תשובה
+    style_mode = st.radio(
+        "בחר סגנון ניתוח:",
+        options=["פשוט ומונגש", "ישיבתי-למדני (סגנון שו\"ת)"],
+        index=0
+    )
+
+    st.markdown("---")
     st.title("📜 היסטוריית שיחות")
     
-    # כפתור שיחה חדשה שאינו אדום (type="secondary")
     if st.button("➕ שיחה חדשה", use_container_width=True, type="secondary"):
         create_new_chat()
         st.rerun()
 
     st.markdown("---")
 
-    # הצגת רק שיחות שיש בהן הודעות (שיחות שנשמרו בארכיון) או השיחה הנוכחית
     archived_chats = {
         c_id: c_data for c_id, c_data in st.session_state.chats.items()
         if c_data["messages"] or c_id == st.session_state.current_chat_id
     }
 
     for c_id, c_data in list(archived_chats.items()):
-        # הבלטה רק של שיחות פעילות שהתחילו (עם הודעות)
         if not c_data["messages"] and c_id != st.session_state.current_chat_id:
             continue
 
         is_active = (c_id == st.session_state.current_chat_id)
         btn_label = f"💬 {c_data['title']}"
         
-        # כפתור השיחה
         if st.button(btn_label, key=f"select_{c_id}", use_container_width=True, type="primary" if is_active else "secondary"):
             st.session_state.current_chat_id = c_id
             st.rerun()
 
-# קוד JavaScript למחיקה באמצעות לחיצה ארוכה (מובייל) או מקש ימני (מחשב)
+# JavaScript למחיקה
 st.components.v1.html(
     """
     <script>
     const parentDoc = window.parent.document;
     
-    // זיהוי מקש ימני או לחיצה ארוכה על כפתורי השיחות בסרגל הצד
     parentDoc.addEventListener('contextmenu', function(e) {
         let btn = e.target.closest('button');
         if (btn && btn.innerText.includes('💬')) {
             e.preventDefault();
             if (confirm("האם ברצונך למחוק שיחה זו?")) {
-                btn.click(); // בחירת השיחה
-                // טריגר למחיקה
-                const sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
+                btn.click();
                 let deleteEvt = new CustomEvent('delete_chat', { detail: btn.innerText });
                 window.parent.dispatchEvent(deleteEvt);
             }
@@ -332,7 +361,7 @@ st.components.v1.html(
                     let deleteEvt = new CustomEvent('delete_chat', { detail: btn.innerText });
                     window.parent.dispatchEvent(deleteEvt);
                 }
-            }, 800); // 800 מילי-שניות נחשב לחיצה ארוכה
+            }, 800);
         }
     });
 
@@ -350,13 +379,11 @@ st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכ�
 
 current_chat = st.session_state.chats[st.session_state.current_chat_id]
 
-# הצגת כל הודעות הצ'אט של השיחה הנוכחית
 for message in current_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    # עדכון כותרת השיחה והכנסתה לארכיון ברגע שהמשתמש שולח הודעה ראשונה
     if not current_chat["messages"]:
         current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
@@ -377,9 +404,8 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
             "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
         ]
 
-        # הרצת חישוב התשובה ברקע
         with ThreadPoolExecutor() as executor:
-            future = executor.submit(analyze_sugya, current_chat["messages"])
+            future = executor.submit(analyze_sugya, current_chat["messages"], style_mode)
             
             idx = 0
             while not future.done():
