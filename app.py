@@ -250,11 +250,19 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
-        with st.status("יהונתן מעיין בסוגיה ומריץ חיפוש במקורות...", expanded=True) as status:
-            st.write("🔍 מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...")
-            st.write("📚 מקבץ שו\"תים ומקורות מנוקדים מספריא...")
-            
+        with st.chat_message("assistant"):
+        status_placeholder = st.empty()  # יצירת מכולה דינמית שתתעדכן כל 3 שניות
+        
+        # רשימת ההודעות המתחלפות
+        messages_list = [
+            "יהונתן חושב...",
+            "יהונתן עומד לפתור את הסוגיה...",
+            "יהונתן מריץ חיפוש בראש וכל التורה כולה לנגד עיניו...",
+            "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
+            "יהונתן צריך ריכוז...",
+            "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
+            "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
+        ]
             answer = analyze_sugya(st.session_state.messages)
             
             if answer:
