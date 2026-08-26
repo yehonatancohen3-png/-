@@ -17,7 +17,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL)
+# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) ותמיכה בעיצוב נקי
 st.markdown(
     """
     <style>
@@ -47,6 +47,12 @@ st.markdown(
     li {
         direction: rtl !important;
         text-align: right !important;
+    }
+
+    /* ביטול מניעת תפריט הקשר למקש ימני בסרגל הצד כדי לאפשר זיהוי מקש ימני למחיקה */
+    [data-testid="stSidebar"] button {
+        user-select: none;
+        -webkit-user-select: none;
     }
     </style>
     """,
@@ -238,50 +244,105 @@ def analyze_sugya(messages_history):
 
 # 7. ניהול היסטוריית השיחות ב-session_state
 if "chats" not in st.session_state:
-    st.session_state.chats = {}  # מילון של כל השיחות: {chat_id: {"title": ..., "messages": [...]}}
+    st.session_state.chats = {}  # מילון השיחות
 
 if "current_chat_id" not in st.session_state:
-    # יצירת שיחה ראשונית בדיפולט
     new_id = str(uuid.uuid4())
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
     st.session_state.current_chat_id = new_id
 
-# פונקציות עזר לניהול שיחות
+if "delete_target_id" in st.session_state:
+    target_id = st.session_state.pop("delete_target_id")
+    if target_id in st.session_state.chats:
+        del st.session_state.chats[target_id]
+        if not st.session_state.chats:
+            new_id = str(uuid.uuid4())
+            st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
+            st.session_state.current_chat_id = new_id
+        else:
+            st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
+
 def create_new_chat():
+    current_chat = st.session_state.chats.get(st.session_state.current_chat_id)
+    # יצירת שיחה חדשה רק במידה והשיחה הנוכחית איננה ריקה
+    if current_chat and not current_chat["messages"]:
+        return  # אנחנו כבר בשיחה חדשה וריקה
     new_id = str(uuid.uuid4())
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
     st.session_state.current_chat_id = new_id
-
-def delete_chat(chat_id):
-    if chat_id in st.session_state.chats:
-        del st.session_state.chats[chat_id]
-    if not st.session_state.chats:
-        create_new_chat()
-    else:
-        st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
 
 # 8. סרגל צד (Sidebar) להצגת היסטוריית השיחות
 with st.sidebar:
     st.title("📜 היסטוריית שיחות")
-    if st.button("➕ שיחה חדשה", use_container_width=True):
+    
+    # כפתור שיחה חדשה שאינו אדום (type="secondary")
+    if st.button("➕ שיחה חדשה", use_container_width=True, type="secondary"):
         create_new_chat()
         st.rerun()
 
     st.markdown("---")
 
-    for c_id, c_data in list(st.session_state.chats.items()):
-        col1, col2 = st.columns([0.8, 0.2])
+    # הצגת רק שיחות שיש בהן הודעות (שיחות שנשמרו בארכיון) או השיחה הנוכחית
+    archived_chats = {
+        c_id: c_data for c_id, c_data in st.session_state.chats.items()
+        if c_data["messages"] or c_id == st.session_state.current_chat_id
+    }
+
+    for c_id, c_data in list(archived_chats.items()):
+        # הבלטה רק של שיחות פעילות שהתחילו (עם הודעות)
+        if not c_data["messages"] and c_id != st.session_state.current_chat_id:
+            continue
+
         is_active = (c_id == st.session_state.current_chat_id)
         btn_label = f"💬 {c_data['title']}"
         
-        with col1:
-            if st.button(btn_label, key=f"select_{c_id}", use_container_width=True, type="primary" if is_active else "secondary"):
-                st.session_state.current_chat_id = c_id
-                st.rerun()
-        with col2:
-            if st.button("🗑️", key=f"del_{c_id}"):
-                delete_chat(c_id)
-                st.rerun()
+        # כפתור השיחה
+        if st.button(btn_label, key=f"select_{c_id}", use_container_width=True, type="primary" if is_active else "secondary"):
+            st.session_state.current_chat_id = c_id
+            st.rerun()
+
+# קוד JavaScript למחיקה באמצעות לחיצה ארוכה (מובייל) או מקש ימני (מחשב)
+st.components.v1.html(
+    """
+    <script>
+    const parentDoc = window.parent.document;
+    
+    // זיהוי מקש ימני או לחיצה ארוכה על כפתורי השיחות בסרגל הצד
+    parentDoc.addEventListener('contextmenu', function(e) {
+        let btn = e.target.closest('button');
+        if (btn && btn.innerText.includes('💬')) {
+            e.preventDefault();
+            if (confirm("האם ברצונך למחוק שיחה זו?")) {
+                btn.click(); // בחירת השיחה
+                // טריגר למחיקה
+                const sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
+                let deleteEvt = new CustomEvent('delete_chat', { detail: btn.innerText });
+                window.parent.dispatchEvent(deleteEvt);
+            }
+        }
+    });
+
+    let pressTimer;
+    parentDoc.addEventListener('touchstart', function(e) {
+        let btn = e.target.closest('button');
+        if (btn && btn.innerText.includes('💬')) {
+            pressTimer = setTimeout(function() {
+                if (confirm("האם ברצונך למחוק שיחה זו?")) {
+                    btn.click();
+                    let deleteEvt = new CustomEvent('delete_chat', { detail: btn.innerText });
+                    window.parent.dispatchEvent(deleteEvt);
+                }
+            }, 800); // 800 מילי-שניות נחשב לחיצה ארוכה
+        }
+    });
+
+    parentDoc.addEventListener('touchend', function(e) {
+        clearTimeout(pressTimer);
+    });
+    </script>
+    """,
+    height=0,
+)
 
 # 9. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
@@ -295,7 +356,7 @@ for message in current_chat["messages"]:
         st.markdown(message["content"])
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    # עדכון כותרת השיחה לפי השאלה הראשונה
+    # עדכון כותרת השיחה והכנסתה לארכיון ברגע שהמשתמש שולח הודעה ראשונה
     if not current_chat["messages"]:
         current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
