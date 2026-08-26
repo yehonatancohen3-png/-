@@ -251,7 +251,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
         st.markdown(prompt)
 
         with st.chat_message("assistant"):
-        status_placeholder = st.empty()  # יצירת מכולה דינמית שתתעדכן כל 3 שניות
+            status_placeholder = st.empty()  # יצירת מכולה דינמית שתתעדכן כל 3 שניות
         
         # רשימת ההודעות המתחלפות
         messages_list = [
