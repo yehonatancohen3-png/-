@@ -4,6 +4,8 @@ import os
 import json
 import requests
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -105,7 +107,7 @@ def fetch_from_sefaria(query: str) -> str:
     
     return "לא נמצאו מקורות ספציפיים בספריא."
 
-# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא) - מתוקן ובטוח!
+# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
 def load_torah_database():
     db_path = os.path.join("data", "torah_database.json")
     if os.path.exists(db_path):
@@ -135,7 +137,6 @@ def retrieve_all_context(query: str) -> str:
         if any(word in content or word in book for word in query_words):
             source_info = f"מקור מקומי: {book} "
             
-            # שליפת שדות בבטחה בעזרת .get() כדי למנוע קריסה (KeyError)
             masechet = item.get("masechet")
             daf = item.get("daf")
             siman = item.get("siman")
@@ -250,24 +251,36 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            status_placeholder = st.empty()  # יצירת מכולה דינמית שתתעדכן כל 3 שניות
-        
-        # רשימת ההודעות המתחלפות
-            messages_list = [
+    with st.chat_message("assistant"):
+        status_placeholder = st.empty()  # יצירת מכולה דינמית
+
+        messages_list = [
             "יהונתן חושב...",
             "יהונתן עומד לפתור את הסוגיה...",
-            "יהונתן מריץ חיפוש בראש וכל التורה כולה לנגד עיניו...",
+            "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
             "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
             "יהונתן צריך ריכוז...",
             "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
             "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
-            ]
-            answer = analyze_sugya(st.session_state.messages)
+        ]
+
+        # הרצת חישוב התשובה ברקע כדי לאפשר להודעות להתחלף בלופ
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(analyze_sugya, st.session_state.messages)
             
-            if answer:
-                status.update(label="יהונתן מצא פתרון!", state="complete", expanded=False)
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            else:
-                status.update(label="התרחשה שגיאה בעת ניתוח הסוגיה", state="error")
+            idx = 0
+            while not future.done():
+                current_msg = messages_list[idx % len(messages_list)]
+                status_placeholder.info(f"⏳ {current_msg}")
+                time.sleep(2.5)  # עדכון ההודעה כל 2.5 שניות
+                idx += 1
+            
+            answer = future.result()
+
+        status_placeholder.empty()  # ניקוי הודעת הטעינה בגמר העיבוד
+
+        if answer:
+            st.markdown(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+        else:
+            st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")
