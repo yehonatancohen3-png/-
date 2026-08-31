@@ -18,7 +18,7 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
 )
 
-# הוספת CSS מבוקר + תיקון גלישה אוטומטית לתחילת התשובה
+# הוספת CSS מבוקר
 st.markdown(
     """
     <style>
@@ -338,8 +338,27 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
     with st.chat_message("user"):  # יצירת בועת הודעה של המשתמש
         st.markdown(prompt)  # הצגת הודעת המשתמש במסך
 
-    # יצירת אלמנט עוגן המאפשר למקד את המסך בתחילת התשובה
-    st.markdown('<div id="assistant-response-start"></div>', unsafe_allow_html=True)
+    # 1. יצירת אלמנט עוגן בדיוק מעל התשובה החדשה
+    st.markdown('<div id="assistant-top-anchor"></div>', unsafe_allow_html=True)
+
+    # 2. הזרקת סקריפט JavaScript פעיל המבטל את הגלישה האוטומטית של Streamlit וממקד את המסך בעוגן
+    st.components.v1.html(
+        """
+        <script>
+            function scrollToTopAnchor() {
+                var anchor = window.parent.document.getElementById("assistant-top-anchor");
+                if (anchor) {
+                    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+            // הרצה מיידית והרצה מתוזמנת כדי להתגבר על הגלישה האוטומטית של Streamlit
+            scrollToTopAnchor();
+            var interval = setInterval(scrollToTopAnchor, 300);
+            setTimeout(function() { clearInterval(interval); }, 4000);
+        </script>
+        """,
+        height=0
+    )
 
     with st.chat_message("assistant"):  # יצירת בועת הודעה של העוזר
         status_placeholder = st.empty()  # יצירת אזור דינמי שניתן לעדכן או לנקות
@@ -372,13 +391,13 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
             st.markdown(answer)  # הצגת התשובה על המסך
             current_chat["messages"].append({"role": "assistant", "content": answer})  # שמירת תשובת העוזר בהיסטוריה
             
-            # הרצת גלישה אוטומטית חלקות ישירות לתחילת התשובה החדשה (כמו ב-Gemini)
+            # הרצה אחרונה וסופית של הגלישה לתחילת התשובה
             st.components.v1.html(
                 """
                 <script>
-                    var target = window.parent.document.getElementById("assistant-response-start");
-                    if (target) {
-                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    var anchor = window.parent.document.getElementById("assistant-top-anchor");
+                    if (anchor) {
+                        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
                 </script>
                 """,
