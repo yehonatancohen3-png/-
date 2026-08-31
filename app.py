@@ -17,34 +17,42 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     layout="centered"  # פריסת הדף בצורה ממורכזת
 )
 
-# הוספת CSS מותאם ומדויק ל-RTL מבלי לשבור את ה-Sidebar במובייל
+# הוספת CSS מתוקן: מבטיח RTL מלא במחשב ושומר על סרגל הצד במובייל שלא יימעך
 st.markdown(
     """
     <style>
-    /* הגדרת RTL כללית לתקשורת וצ'אט */
-    .stApp, [data-testid="stChatMessage"], [data-testid="stChatInput"] {
-        direction: rtl;
-        text-align: right;
+    /* 1. הגדרת RTL מלאה לכל אזור התוכן הראשי */
+    .stApp, .stAppHeader, [data-testid="stAppViewContainer"] {
+        direction: rtl !important;
+        text-align: right !important;
     }
 
-    /* תיקון ספציפי לסרגל הצד (Sidebar) כדי שלא יימעך במובייל */
+    /* 2. הגדרת RTL לסרגל הצד מבלי לפגוע במידות שלו במובייל */
     [data-testid="stSidebar"] {
-        direction: rtl;
-        text-align: right;
+        direction: rtl !important;
+        text-align: right !important;
+    }
+    
+    [data-testid="stSidebarContent"] {
+        direction: rtl !important;
+        text-align: right !important;
     }
 
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-        width: 100% !important;
+    /* 3. יישור טקסט, כותרות והודעות צ'אט */
+    [data-testid="stChatMessage"], [data-testid="stChatInput"], .stMarkdown, p, h1, h2, h3, h4, label {
+        direction: rtl !important;
+        text-align: right !important;
     }
 
-    /* יישור רשימות מימין לשמאל */
+    /* 4. תיקון תצוגת רשימות (נקודות/מספרים) ב-RTL */
     ul, ol {
-        direction: rtl;
-        text-align: right;
+        direction: rtl !important;
+        text-align: right !important;
         padding-right: 1.5rem !important;
         padding-left: 0rem !important;
     }
 
+    /* 5. מניעת בחירת טקסט בכפתורי סרגל הצד */
     [data-testid="stSidebar"] button {
         user-select: none;
         -webkit-user-select: none;
