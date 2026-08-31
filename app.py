@@ -1,5 +1,6 @@
 # 1. ייבוא ספריות נדרשות
 import streamlit as st  # ייבוא ספריית Streamlit לבניית ממשק המשתמש
+import streamlit.components.v1 as components  # ייבוא הרכיב להרצת JavaScript פעיל ב-DOM
 import os  # ייבוא ספרייה לעבודה עם מערכת הקבצים ונתיבים
 import json  # ייבוא ספרייה לטיפול בקובצי JSON
 import requests  # ייבוא ספרייה לביצוע בקשות HTTP לקריאה מ-APIs
@@ -18,10 +19,15 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
 )
 
-# הוספת CSS מבוקר
+# הוספת CSS מבוקר למניעת גלישה אוטומטית לתחתית + סידור RTL
 st.markdown(
     """
     <style>
+    /* איפוס גלישה אוטומטית כפויה של Streamlit */
+    html, body, [data-testid="stAppViewContainer"] {
+        scroll-behavior: smooth !important;
+    }
+
     /* 1. איפוס מעטפת האפליקציה למניעת מריחה ועיקום של הפריסה בנייד */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         direction: ltr !important; /* שמירה על LTR במעטפת ה-Grid של המערכת כדי למנוע שבירת רכיבים */
@@ -191,14 +197,14 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 
     if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":  # התאמה לפי בחירת המשתמש לסגנון הישיבתי
         return f"""
-אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית המדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
+אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית المדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
 
 תפקידך להציג משא ומתן למדני ברצף עיוני, המבוסס על דיוק בלשון המקורות, עמידה על קושיות וסתירות, הגדרת חקירות וסברות, וחילוקי דינים תוך שימוש נרחב בשפה תלמודית וארמית.
 
 {base_rules}
 
 הנחיות חובה לכתיבה בסגנון זה:
-1. **שפה תלמודית וארמית:** עשה שימוש תדיר בביטויי בית המדרש ובארמית:
+1. **שפה תלמודית וארמית:** עשה שימוש תדיר בביטויי בית المדרש ובארמית:
    - "והנה באה לפנינו שאלה..." / "הנה גרסינן בגמרא..."
    - "ולכאורה יש לדון בזה מכמה צדדים עיקריים..."
    - "ופשוט דבמקום..." / "איכא למיחש טובא..."
@@ -338,28 +344,6 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
     with st.chat_message("user"):  # יצירת בועת הודעה של המשתמש
         st.markdown(prompt)  # הצגת הודעת המשתמש במסך
 
-    # 1. יצירת אלמנט עוגן בדיוק מעל התשובה החדשה
-    st.markdown('<div id="assistant-top-anchor"></div>', unsafe_allow_html=True)
-
-    # 2. הזרקת סקריפט JavaScript פעיל המבטל את הגלישה האוטומטית של Streamlit וממקד את המסך בעוגן
-    st.components.v1.html(
-        """
-        <script>
-            function scrollToTopAnchor() {
-                var anchor = window.parent.document.getElementById("assistant-top-anchor");
-                if (anchor) {
-                    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }
-            // הרצה מיידית והרצה מתוזמנת כדי להתגבר על הגלישה האוטומטית של Streamlit
-            scrollToTopAnchor();
-            var interval = setInterval(scrollToTopAnchor, 300);
-            setTimeout(function() { clearInterval(interval); }, 4000);
-        </script>
-        """,
-        height=0
-    )
-
     with st.chat_message("assistant"):  # יצירת בועת הודעה של העוזר
         status_placeholder = st.empty()  # יצירת אזור דינמי שניתן לעדכן או לנקות
 
@@ -390,18 +374,46 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
         if answer:  # אם הוחזרה תשובה תקינה מהמודל
             st.markdown(answer)  # הצגת התשובה על המסך
             current_chat["messages"].append({"role": "assistant", "content": answer})  # שמירת תשובת העוזר בהיסטוריה
-            
-            # הרצה אחרונה וסופית של הגלישה לתחילת התשובה
-            st.components.v1.html(
+
+            # הזרקת JavaScript אמיתי דרך iframe שמאתר את מכלול הגלישה של Streamlit ומגדיר את המיקום
+            components.html(
                 """
                 <script>
-                    var anchor = window.parent.document.getElementById("assistant-top-anchor");
-                    if (anchor) {
-                        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    function fixScroll() {
+                        try {
+                            // איתור חלון האב הגבוה ביותר (Parent Document)
+                            var mainDoc = window.parent.document;
+                            
+                            # איתור ה-Container הפנימי של Streamlit שאחראי על הגלישה
+                            var mainContainer = mainDoc.querySelector('[data-testid="stAppViewContainer"]') || mainDoc.querySelector('.main');
+                            
+                            # איתור כל הודעות העוזר
+                            var assistantMessages = mainDoc.querySelectorAll('[data-testid="stChatMessage"]');
+                            
+                            if (assistantMessages.length > 0 && mainContainer) {
+                                // לקיחת ההודעה האחרונה שנכתבה
+                                var lastMessage = assistantMessages[assistantMessages.length - 1];
+                                
+                                // חישוב המיקום המדויק של ראש ההודעה ביחס למכלול הגלישה
+                                var targetY = lastMessage.offsetTop - 80;
+                                
+                                // ביצוע הגלישה בצורה חלקה וישירה
+                                mainContainer.scrollTo({
+                                    top: targetY,
+                                    behavior: 'smooth'
+                                });
+                            }
+                        } catch (e) {
+                            console.log("Scroll error: ", e);
+                        }
                     }
+                    // הרצה מיידית והשהיה קלה להבטחת רינדור האלמנט בדפדפן בנייד
+                    setTimeout(fixScroll, 100);
+                    setTimeout(fixScroll, 500);
                 </script>
                 """,
-                height=0
+                height=0,
+                width=0
             )
         else:  # במידה וארעה שגיאה ולא התקבלה תשובה
             st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")  # הצגת הודעת שגיאה
