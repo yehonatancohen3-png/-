@@ -14,60 +14,32 @@ import google.generativeai as genai  # ייבוא ה-SDK של Google Gemini
 st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     page_title="סוגיה בעיון - AI תורני",  # כותרת הדף בלשונית הדפדפן
     page_icon="📜",  # האייקון שיופיע בלשונית הדפדפן
-    layout="centered"  # פריסת הדף בצורה ממורכזת
+    layout="centered",  # פריסת הדף בצורה ממורכזת
+    initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
 )
 
-# הוספת CSS מתוקן: מונע מעיכה במובייל ושומר על RTL מלא במחשב
+# הוספת CSS נקי: מנקה הגדרות פוגעניות ושומר על RTL
 st.markdown(
     """
     <style>
-    /* 1. הגדרת RTL מלאה לכל אזור התוכן הראשי */
-    .stApp, .stAppHeader, [data-testid="stAppViewContainer"] {
+    /* הגדרת RTL כללית */
+    .stApp, [data-testid="stSidebarContent"] {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* 2. הגדרת RTL פנימית בסרגל הצד מבלי לשבור את מבנה ה-Flex/Grid בנייד */
-    [data-testid="stSidebar"] {
-        text-align: right !important;
-    }
-    
-    [data-testid="stSidebarContent"] {
-        direction: rtl !important;
-        text-align: right !important;
-    }
-
-    /* 3. שמירה על כיווניות ניווט סרגל הצד */
-    [data-testid="stSidebarNav"] {
-        direction: rtl !important;
-    }
-
-    /* 4. יישור טקסט, כותרות והודעות צ'אט */
+    /* יישור טקסט, כותרות והודעות צ'אט */
     [data-testid="stChatMessage"], [data-testid="stChatInput"], .stMarkdown, p, h1, h2, h3, h4, label {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* 5. תיקון תצוגת רשימות (נקודות/מספרים) ב-RTL */
+    /* תיקון תצוגת רשימות ב-RTL */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
         padding-right: 1.5rem !important;
         padding-left: 0rem !important;
-    }
-
-    /* 6. תיקון כפתורים בסרגל הצד: מניעת מעיכת אותיות ואיפוס גלישה בנייד */
-    [data-testid="stSidebar"] button {
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        word-break: break-word !important;
-        user-select: none;
-        -webkit-user-select: none;
-    }
-
-    [data-testid="stSidebar"] button p {
-        word-break: break-word !important;
-        white-space: normal !important;
     }
     </style>
     """,
@@ -197,7 +169,7 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 
     if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":  # התאמה לפי בחירת המשתמש לסגנון הישיבתי
         return f"""
-אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית המדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
+אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית المדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
 
 תפקידך להציג משא ומתן למדני ברצף עיוני, המבוסס על דיוק בלשון המקורות, עמידה על קושיות וסתירות, הגדרת חקירות וסברות, וחילוקי דינים תוך שימוש נרחב בשפה תלמודית וארמית.
 
@@ -287,9 +259,9 @@ def create_new_chat():  # פונקציה ליצירת שיחה חדשה
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}  # שמירת השיחה הריקה
     st.session_state.current_chat_id = new_id  # מעבר לשיחה החדשה
 
-# 8. סרגל צד (Sidebar)
+# 8. סרגל צד (Sidebar) - עיצוב נקי ומונגש למובייל
 with st.sidebar:  # פתיחת אזור סרגל הצד
-    st.title("⚙️ הגדרות וסגנון")  # כותרת הגדרות בסרגל הצד
+    st.title("⚙️ הגדרות")  # כותרת הגדרות בסרגל הצד
     
     # בחירת סגנון תשובה
     style_mode = st.radio(  # רכיב רדיו לבחירת סגנון
@@ -299,69 +271,34 @@ with st.sidebar:  # פתיחת אזור סרגל הצד
     )
 
     st.markdown("---")  # קו מפריד עיצובי
-    st.title("📜 היסטוריית שיחות")  # כותרת היסטוריה בסרגל הצד
     
-    if st.button("➕ שיחה חדשה", use_container_width=True, type="secondary"):  # כפתור שיחה חדשה לא מודגש
+    if st.button("➕ שיחה חדשה", use_container_width=True):  # כפתור ליצירת שיחה חדשה
         create_new_chat()  # קריאה לפונקציית יצירת שיחה
         st.rerun()  # רענון הדף
 
     st.markdown("---")  # קו מפריד עיצובי
+    st.title("📜 היסטוריית שיחות")  # כותרת היסטוריה בסרגל הצד
 
-    archived_chats = {  # סינון השיחות כך שיוצגו רק שיחות עם הודעות או השיחה הנוכחית
-        c_id: c_data for c_id, c_data in st.session_state.chats.items()
+    # סינון השיחות הפעילות
+    active_chats = {
+        c_id: c_data["title"]
+        for c_id, c_data in st.session_state.chats.items()
         if c_data["messages"] or c_id == st.session_state.current_chat_id
     }
 
-    for c_id, c_data in list(archived_chats.items()):  # מעבר על רשימת השיחות בארכיון
-        if not c_data["messages"] and c_id != st.session_state.current_chat_id:  # אם השיחה ריקה ואינה הפעילה
-            continue  # דילוג על הצגתה
-
-        is_active = (c_id == st.session_state.current_chat_id)  # בדיקה אם זו השיחה הנידונה כעת
-        btn_label = f"💬 {c_data['title']}"  # יצירת תווית הכפתור עם כותרת השיחה
+    if active_chats:
+        # שימוש ב-selectbox במקום כפתורים מרובים למניעת מעיכת אותיות במובייל
+        selected_id = st.selectbox(
+            "בחר שיחה מהרשימה:",
+            options=list(active_chats.keys()),
+            format_func=lambda x: active_chats[x],
+            index=list(active_chats.keys()).index(st.session_state.current_chat_id)
+        )
         
-        if st.button(btn_label, key=f"select_{c_id}", use_container_width=True, type="primary" if is_active else "secondary"):  # כפתור לבחירת השיחה
-            st.session_state.current_chat_id = c_id  # עדכון המזהה הפעיל
-            st.rerun()  # רענון המסך להצגת השיחה הנבחרת
-
-# JavaScript למחיקת שיחות בלחיצה ארוכה / מקש ימני
-st.components.v1.html(  # הזרקת רכיב ה-JavaScript המותאם אישית
-    """
-    <script>
-    const parentDoc = window.parent.document;
-    
-    parentDoc.addEventListener('contextmenu', function(e) {
-        let btn = e.target.closest('button');
-        if (btn && btn.innerText.includes('💬')) {
-            e.preventDefault();
-            if (confirm("האם ברצונך למחוק שיחה זו?")) {
-                btn.click();
-                let deleteEvt = new CustomEvent('delete_chat', { detail: btn.innerText });
-                window.parent.dispatchEvent(deleteEvt);
-            }
-        }
-    });
-
-    let pressTimer;
-    parentDoc.addEventListener('touchstart', function(e) {
-        let btn = e.target.closest('button');
-        if (btn && btn.innerText.includes('💬')) {
-            pressTimer = setTimeout(function() {
-                if (confirm("האם ברצונך למחוק שיחה זו?")) {
-                    btn.click();
-                    let deleteEvt = new CustomEvent('delete_chat', { detail: btn.innerText });
-                    window.parent.dispatchEvent(deleteEvt);
-                }
-            }, 800);
-        }
-    });
-
-    parentDoc.addEventListener('touchend', function(e) {
-        clearTimeout(pressTimer);
-    });
-    </script>
-    """,
-    height=0,  # גובה הרכיב נקבע ל-0 כדי שלא תפספס מקום במסך
-)
+        # עדכון השיחה הנבחרת בעת שינוי
+        if selected_id != st.session_state.current_chat_id:
+            st.session_state.current_chat_id = selected_id
+            st.rerun()
 
 # 9. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")  # הכותרת הראשית בדף
