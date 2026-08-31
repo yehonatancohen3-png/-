@@ -18,23 +18,45 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
 )
 
-# הוספת CSS נקי: מנקה הגדרות פוגעניות ושומר על RTL
+# הוספת CSS מבוקר: מונע את מריחת האותיות במרכז המסך בנייד
 st.markdown(
     """
     <style>
-    /* הגדרת RTL כללית */
-    .stApp, [data-testid="stSidebarContent"] {
+    /* 1. איפוס מעטפת האפליקציה למניעת מריחה ועיקום של הפריסה בנייד */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        direction: ltr !important; /* שמירה על LTR במעטפת ה-Grid של המערכת כדי מנע שבירת רכיבים */
+    }
+
+    /* 2. החלת RTL אך ורק על אזורי תוכן וטקסט בלבד */
+    [data-testid="stMainBlockContainer"], 
+    [data-testid="stChatMessage"], 
+    [data-testid="stChatInput"], 
+    .stMarkdown, p, h1, h2, h3, h4, h5, h6, label, span {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* יישור טקסט, כותרות והודעות צ'אט */
-    [data-testid="stChatMessage"], [data-testid="stChatInput"], .stMarkdown, p, h1, h2, h3, h4, label {
+    /* 3. תיקון סרגל הצד (Sidebar) במובייל - מניעת התכווצות למרכז */
+    [data-testid="stSidebar"] {
         direction: rtl !important;
         text-align: right !important;
     }
+    
+    [data-testid="stSidebarUserContent"] {
+        direction: rtl !important;
+        text-align: right !important;
+        padding-top: 2rem !important;
+    }
 
-    /* תיקון תצוגת רשימות ב-RTL */
+    /* 4. תיקון כפתורים ורכיבי קלט בסרגל הצד */
+    [data-testid="stSidebar"] button, 
+    [data-testid="stSidebar"] div[role="combobox"] {
+        direction: rtl !important;
+        text-align: right !important;
+        width: 100% !important;
+    }
+
+    /* 5. תיקון תצוגת רשימות (נקודות/מספרים) */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
@@ -160,7 +182,7 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
     base_rules = """
 כללי ברזל לציטוט ומקורות (חובה מוחלטת):
 1. כאשר אתה מביא ציטוט מתוך המקורות שנשלפו מספריא או מהמאגר המקומי, חובה עליך להביא אותו מילה במילה בדיוק מוחלט כפי שהוא מופיע במקור!
-2. שמור על הניקוד המקורי כפי שנשלף מספריא. אל תוריד ניקוד, אל תשנה אותיות ואל תסדר מחדש את משפטי המקור.
+2. שמור על הניקוד המקורי כפי שנשלף מספריא. אל תוריד ניקוד, אל תשנה אותיות ואל תשנה את משפטי המקור.
 3. תחום כל ציטוט מדויק בתוך מירכאות ("...").
 4. ציין תמיד בצמוד לכל ציטוט את מראה המקום המדויק שלו.
 5. אסור להמציא מקורות, ציטוטים, ניקוד או שמות ספרים שלא קיימים!
@@ -169,7 +191,7 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 
     if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":  # התאמה לפי בחירת המשתמש לסגנון הישיבתי
         return f"""
-אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית المדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
+אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית המדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
 
 תפקידך להציג משא ומתן למדני ברצף עיוני, המבוסס על דיוק בלשון המקורות, עמידה על קושיות וסתירות, הגדרת חקירות וסברות, וחילוקי דינים תוך שימוש נרחב בשפה תלמודית וארמית.
 
@@ -259,7 +281,7 @@ def create_new_chat():  # פונקציה ליצירת שיחה חדשה
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}  # שמירת השיחה הריקה
     st.session_state.current_chat_id = new_id  # מעבר לשיחה החדשה
 
-# 8. סרגל צד (Sidebar) - עיצוב נקי ומונגש למובייל
+# 8. סרגל צד (Sidebar) - תפריט מוגן ממעיכות
 with st.sidebar:  # פתיחת אזור סרגל הצד
     st.title("⚙️ הגדרות")  # כותרת הגדרות בסרגל הצד
     
@@ -287,7 +309,7 @@ with st.sidebar:  # פתיחת אזור סרגל הצד
     }
 
     if active_chats:
-        # שימוש ב-selectbox במקום כפתורים מרובים למניעת מעיכת אותיות במובייל
+        # שימוש ב-selectbox מבטיח תפריט נגלל יחיד ומונע לחלוטין מריחת כפתורים במרכז
         selected_id = st.selectbox(
             "בחר שיחה מהרשימה:",
             options=list(active_chats.keys()),
