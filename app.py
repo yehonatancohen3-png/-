@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 3. CSS חריף המנטרל לחלוטין את ה-Auto Scroll של Streamlit
+# 3. CSS מותאם למניעת Auto Scroll ושמירה על RTL
 st.markdown(
     """
     <style>
@@ -112,7 +112,7 @@ def load_and_index_database():
     except Exception:
         return [], {}
 
-# 6. חיפוש מקומי מהיר במאגר מבוסס אינדקס
+# 6. חיפוש מקומי מורחב מבוסס אינדקס (עד 6 מקורות)
 def search_local_database_fast(query: str) -> str:
     database, word_index = load_and_index_database()
     if not database or not word_index:
@@ -131,7 +131,8 @@ def search_local_database_fast(query: str) -> str:
         return ""
 
     matched_local = []
-    for idx in list(matching_indices)[:3]:  # הגבלה ל-3 תוצאות הרלוונטיות ביותר
+    # שליפת עד 6 מקורות מקומיים בלחיצה אחת
+    for idx in list(matching_indices)[:6]:
         item = database[idx]
         source_info = f"מקור מקומי: {item.get('book', '')} "
         if item.get("masechet"): source_info += f"מסכת {item.get('masechet')} "
@@ -140,28 +141,33 @@ def search_local_database_fast(query: str) -> str:
         if item.get("seif"): source_info += f"סעיף {item.get('seif')} "
         
         content = item.get('content', '')
-        source_info += f"\nתוכן: \"{content[:300]}...\"" if len(content) > 300 else f"\nתוכן: \"{content}\""
+        # קיצור הטקסט ל-200 תווים מאפשר להכניס יותר מקורות בבת אחת
+        source_info += f"\nתוכן: \"{content[:200]}...\"" if len(content) > 200 else f"\nתוכן: \"{content}\""
         matched_local.append(source_info)
         
     return "\n\n".join(matched_local)
 
-# 7. פנייה לספריא API עם Timeout מקוצר (1.5 שניות בלבד מונע תקיעות רשת)
+# 7. פנייה אופטימלית לספריא API (עד 5 מקורות, timeout של 3.0 שניות וחילוץ מילות מפתח)
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_from_sefaria_fast(query: str) -> str:
     try:
+        # חילוץ מילות מפתח משמעותיות בלבד (מילים מעל 2 אותיות)
+        keywords = [w for w in re.findall(r'\w+', query) if len(w) > 2]
+        clean_query = " ".join(keywords[:3]) if keywords else query
+
         url = "https://www.sefaria.org/api/v2/search/text"
         payload = {
-            "query": query,
+            "query": clean_query,
             "type": "text",
-            "field": "exact",
-            "size": 3
+            "size": 5  # הגדלת כמות המקורות ל-5
         }
-        response = requests.post(url, json=payload, timeout=1.5)
+        # Timeout מאוזן של 3.0 שניות לקבלת מקסימום תוצאות מבלי לתקוע את המערכת
+        response = requests.post(url, json=payload, timeout=3.0)
         
         if response.status_code == 200:
             hits = response.json().get("hits", {}).get("hits", [])
             results = []
-            for hit in hits[:3]:
+            for hit in hits:
                 source = hit.get("_source", {})
                 title = source.get("ref", "")
                 he_text = source.get("he", "")
@@ -173,7 +179,7 @@ def fetch_from_sefaria_fast(query: str) -> str:
             if results:
                 return "\n\n".join(results)
     except Exception:
-        pass  # במידה וחרג מפרק הזמן או נכשל - ממשיכים הלאה מיד ללא תקיעה
+        pass
     return ""
 
 # 8. שליפת מקורות מקבילית ומהירה
@@ -263,7 +269,6 @@ def analyze_sugya(messages_history, style_mode):
             generation_config=generation_config
         )
 
-        # שילוב 4 ההודעות האחרונות בלבד למניעת העמסת היסטוריה איטית על המודל
         formatted_history = []
         recent_history = messages_history[-5:-1] if len(messages_history) > 5 else messages_history[:-1]
         for msg in recent_history:
@@ -415,7 +420,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
                         status.update(label=current_msg)
                         last_update = time.time()
                     
-                    time.sleep(0.1)  # בדיקת דופק קצרה לזיהוי סיום מיידי
+                    time.sleep(0.1)
                 
                 answer = future.result()
 
