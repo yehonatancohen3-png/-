@@ -19,21 +19,22 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
 )
 
-# הוספת CSS מבוקר למניעת גלישה אוטומטית לתחתית + סידור RTL
+# 3. CSS חריף המנטרל לחלוטין את ה-Auto Scroll של Streamlit
 st.markdown(
     """
     <style>
-    /* איפוס גלישה אוטומטית כפויה של Streamlit */
-    html, body, [data-testid="stAppViewContainer"] {
-        scroll-behavior: smooth !important;
+    /* 1. איפוס הגלישה הכפויה של Streamlit */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        scroll-behavior: auto !important;
+        overflow-anchor: none !important; /* מונע מהדפדפן להינעל על אלמנטים בתחתית הדף */
     }
 
-    /* 1. איפוס מעטפת האפליקציה למניעת מריחה ועיקום של הפריסה בנייד */
+    /* 2. שמירה על פריסת LTR במעטפת המערכת למניעת עיוותים */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        direction: ltr !important; /* שמירה על LTR במעטפת ה-Grid של המערכת כדי למנוע שבירת רכיבים */
+        direction: ltr !important;
     }
 
-    /* 2. החלת RTL אך ורק על אזורי תוכן וטקסט בלבד */
+    /* 3. החלת RTL אך ורק על אזורי תוכן וטקסט */
     [data-testid="stMainBlockContainer"], 
     [data-testid="stChatMessage"], 
     [data-testid="stChatInput"], 
@@ -42,7 +43,7 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* 3. תיקון סרגל הצד (Sidebar) במובייל */
+    /* 4. תיקון סרגל הצד */
     [data-testid="stSidebar"] {
         direction: rtl !important;
         text-align: right !important;
@@ -54,7 +55,6 @@ st.markdown(
         padding-top: 2rem !important;
     }
 
-    /* 4. תיקון כפתורים ורכיבי קלט בסרגל הצד */
     [data-testid="stSidebar"] button, 
     [data-testid="stSidebar"] div[role="combobox"] {
         direction: rtl !important;
@@ -62,7 +62,7 @@ st.markdown(
         width: 100% !important;
     }
 
-    /* 5. תיקון תצוגת רשימות (נקודות/מספרים) */
+    /* 5. תיקון תצוגת רשימות */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
@@ -74,7 +74,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 3. טעינת מפתח ה-API
+# 4. טעינת מפתח ה-API
 load_dotenv()  # טעינת המשתנים מקובץ .env במידה וקיים
 
 api_key = None  # אתחול המשתנה למפתח ה-API
@@ -92,7 +92,7 @@ if not api_key:  # במידה ולא נמצא מפתח כלל
 
 genai.configure(api_key=api_key)  # הגדרת המפתח עבור ספריית גוגל
 
-# 4. מנגנון שליפת מקורות מ-Sefaria API
+# 5. מנגנון שליפת מקורות מ-Sefaria API
 def fetch_from_sefaria(query: str) -> str:  # הגדרת פונקציה לשליפת מקורות מספריא
     try:  # תחילת בלוק טיפול בשגיאות
         url = "https://www.sefaria.org/api/v2/search/text"  # כתובת ה-API של ספריא לחיפוש טקסט
@@ -129,7 +129,7 @@ def fetch_from_sefaria(query: str) -> str:  # הגדרת פונקציה לשלי
     
     return "לא נמצאו מקורות ספציפיים בספריא."  # ברירת מחדל במידה ולא הוחזר טקסט
 
-# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
+# 6. מנגנון שליפה משולב (מאגר מקומי + ספריא)
 def load_torah_database():  # פונקציה שטוענת את מאגר הנתונים המקומי
     db_path = os.path.join("data", "torah_database.json")  # בניה של נתיב הקובץ
     if os.path.exists(db_path):  # בדיקה אם הקובץ קיים
@@ -183,7 +183,7 @@ def retrieve_all_context(query: str) -> str:  # פונקציה לרכז את כ�
         return "\n\n".join(context_parts)  # החזרת המקורות כטקסט מאוחד
     return "לא נמצאו מקורות במאגרי המידע הזמינים."  # החזרה במידה ולא נמצא דבר
 
-# 6. יצירת System Prompt דינמי לפי סגנון הנבחר
+# 7. יצירת System Prompt דינמי לפי סגנון הנבחר
 def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת את ה-Prompt בהתאם לסגנון הנבחר
     base_rules = """
 כללי ברזל לציטוט ומקורות (חובה מוחלטת):
@@ -197,14 +197,14 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 
     if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":  # התאמה לפי בחירת המשתמש לסגנון הישיבתי
         return f"""
-אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית المדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
+אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית המדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
 
 תפקידך להציג משא ומתן למדני ברצף עיוני, המבוסס על דיוק בלשון המקורות, עמידה על קושיות וסתירות, הגדרת חקירות וסברות, וחילוקי דינים תוך שימוש נרחב בשפה תלמודית וארמית.
 
 {base_rules}
 
 הנחיות חובה לכתיבה בסגנון זה:
-1. **שפה תלמודית וארמית:** עשה שימוש תדיר בביטויי בית المדרש ובארמית:
+1. **שפה תלמודית וארמית:** עשה שימוש תדיר בביטויי בית המדרש ובארמית:
    - "והנה באה לפנינו שאלה..." / "הנה גרסינן בגמרא..."
    - "ולכאורה יש לדון בזה מכמה צדדים עיקריים..."
    - "ופשוט דבמקום..." / "איכא למיחש טובא..."
@@ -270,7 +270,7 @@ def analyze_sugya(messages_history, style_mode):  # פונקציית הניתו�
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")  # הצגת שגיאה למשתמש
         return None  # החזרת None
 
-# 7. ניהול היסטוריית השיחות ב-session_state
+# 8. ניהול היסטוריית השיחות ב-session_state
 if "chats" not in st.session_state:  # אם מילון השיחות לא קיים בזיכרון ה-Session
     st.session_state.chats = {}  # אתחול מילון שיחות ריק
 
@@ -287,7 +287,7 @@ def create_new_chat():  # פונקציה ליצירת שיחה חדשה
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}  # שמירת השיחה הריקה
     st.session_state.current_chat_id = new_id  # מעבר לשיחה החדשה
 
-# 8. סרגל צד (Sidebar)
+# 9. סרגל צד (Sidebar)
 with st.sidebar:  # פתיחת אזור סרגל הצד
     st.title("⚙️ הגדרות")  # כותרת הגדרות בסרגל הצד
     
@@ -326,7 +326,7 @@ with st.sidebar:  # פתיחת אזור סרגל הצד
             st.session_state.current_chat_id = selected_id
             st.rerun()
 
-# 9. עיצוב הממשק והצגת השיחה הנוכחית
+# 10. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")  # הכותרת הראשית בדף
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")  # תיאור משנה
 
@@ -341,6 +341,43 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
         current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")  # קביעת כותרת השיחה לפי 25 התווים הראשונים
 
     current_chat["messages"].append({"role": "user", "content": prompt})  # הוספת הודעת המשתמש לזיכרון
+    
+    # הזרקת סקריפט JavaScript שמתקין שומר (Lock) מתמיד על הגלישה ברגע שליחת הודעה
+    components.html(
+        """
+        <script>
+            (function() {
+                var parentDoc = window.parent.document;
+                var container = parentDoc.querySelector('[data-testid="stAppViewContainer"]') || parentDoc.querySelector('.main') || parentDoc.documentElement;
+                
+                // מציאת הודעת המשתמש האחרונה שנשלחה כעת
+                var userMessages = parentDoc.querySelectorAll('[data-testid="stChatMessage"]');
+                var lastUserMsg = userMessages[userMessages.length - 1];
+                
+                if (lastUserMsg) {
+                    var targetTop = lastUserMsg.offsetTop - 20;
+                    
+                    // מנגנון נעילת גלישה לתקופה שבה התשובה נטרפת
+                    var forceScroll = function() {
+                        container.scrollTop = targetTop;
+                    };
+                    
+                    // הרצה מיידית
+                    forceScroll();
+                    
+                    // שמירה על המיקום במשך 3 שניות רצופות בלולאה קצרה (מונע קפיצה מכל סוג)
+                    var intervalId = setInterval(forceScroll, 50);
+                    setTimeout(function() {
+                        clearInterval(intervalId);
+                    }, 4000);
+                }
+            })();
+        </script>
+        """,
+        height=0,
+        width=0
+    )
+
     with st.chat_message("user"):  # יצירת בועת הודעה של המשתמש
         st.markdown(prompt)  # הצגת הודעת המשתמש במסך
 
@@ -374,46 +411,5 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
         if answer:  # אם הוחזרה תשובה תקינה מהמודל
             st.markdown(answer)  # הצגת התשובה על המסך
             current_chat["messages"].append({"role": "assistant", "content": answer})  # שמירת תשובת העוזר בהיסטוריה
-
-            # הזרקת JavaScript אמיתי דרך iframe שמאתר את מכלול הגלישה של Streamlit ומגדיר את המיקום
-            components.html(
-                """
-                <script>
-                    function fixScroll() {
-                        try {
-                            // איתור חלון האב הגבוה ביותר (Parent Document)
-                            var mainDoc = window.parent.document;
-                            
-                            # איתור ה-Container הפנימי של Streamlit שאחראי על הגלישה
-                            var mainContainer = mainDoc.querySelector('[data-testid="stAppViewContainer"]') || mainDoc.querySelector('.main');
-                            
-                            # איתור כל הודעות העוזר
-                            var assistantMessages = mainDoc.querySelectorAll('[data-testid="stChatMessage"]');
-                            
-                            if (assistantMessages.length > 0 && mainContainer) {
-                                // לקיחת ההודעה האחרונה שנכתבה
-                                var lastMessage = assistantMessages[assistantMessages.length - 1];
-                                
-                                // חישוב המיקום המדויק של ראש ההודעה ביחס למכלול הגלישה
-                                var targetY = lastMessage.offsetTop - 80;
-                                
-                                // ביצוע הגלישה בצורה חלקה וישירה
-                                mainContainer.scrollTo({
-                                    top: targetY,
-                                    behavior: 'smooth'
-                                });
-                            }
-                        } catch (e) {
-                            console.log("Scroll error: ", e);
-                        }
-                    }
-                    // הרצה מיידית והשהיה קלה להבטחת רינדור האלמנט בדפדפן בנייד
-                    setTimeout(fixScroll, 100);
-                    setTimeout(fixScroll, 500);
-                </script>
-                """,
-                height=0,
-                width=0
-            )
         else:  # במידה וארעה שגיאה ולא התקבלה תשובה
             st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")  # הצגת הודעת שגיאה
