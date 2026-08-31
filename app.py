@@ -17,36 +17,32 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     layout="centered"  # פריסת הדף בצורה ממורכזת
 )
 
-# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) ותמיכה בעיצוב נקי
-st.markdown(  # הזרקת קוד HTML/CSS להתאמת כיווניות השפה לעברית
+# הוספת CSS מותאם ומדויק ל-RTL מבלי לשבור את ה-Sidebar במובייל
+st.markdown(
     """
     <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
-        direction: rtl !important;
-        text-align: right !important;
-    }
-    
-    [data-testid="stChatMessage"], [data-testid="stChatInput"], div[data-baseweb="input"] {
-        direction: rtl !important;
-        text-align: right !important;
+    /* הגדרת RTL כללית לתקשורת וצ'אט */
+    .stApp, [data-testid="stChatMessage"], [data-testid="stChatInput"] {
+        direction: rtl;
+        text-align: right;
     }
 
-    h1, h2, h3, h4, h5, h6, p, div, span, label, .stMarkdownContainer, .stMarkdown {
-        direction: rtl !important;
-        text-align: right !important;
+    /* תיקון ספציפי לסרגל הצד (Sidebar) כדי שלא יימעך במובייל */
+    [data-testid="stSidebar"] {
+        direction: rtl;
+        text-align: right;
     }
 
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        width: 100% !important;
+    }
+
+    /* יישור רשימות מימין לשמאל */
     ul, ol {
-        direction: rtl !important;
-        text-align: right !important;
+        direction: rtl;
+        text-align: right;
         padding-right: 1.5rem !important;
         padding-left: 0rem !important;
-        margin-right: 0rem !important;
-    }
-
-    li {
-        direction: rtl !important;
-        text-align: right !important;
     }
 
     [data-testid="stSidebar"] button {
@@ -55,7 +51,7 @@ st.markdown(  # הזרקת קוד HTML/CSS להתאמת כיווניות השפ�
     }
     </style>
     """,
-    unsafe_allow_html=True  # מאשר להריץ את קוד ה-HTML וה-CSS
+    unsafe_allow_html=True
 )
 
 # 3. טעינת מפתח ה-API
@@ -198,9 +194,6 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 2. **מבנה רציף וזורם:** כתוב כמאמר עיוני למדני או שו"ת רציף (בלי כותרות מודרניות מנוכרות כגון "תשובה:", "סעיף 1", "סיכום").
 3. **דיוק ופלפול:** התחל בדיוק לשון המקור (גמרא, רמב"ם, טור או שו"ע), הקשה והקשה בין השיטות, והגדר את החקירה (גברא vs חפצא, איסור עצמי vs דין מחייב וכדומה).
 4. **חתומה וסיכום:** סיים בהכרעת הדין, בברכה תורנית קלאסית, ולאחריה משפט הסיום המחייב לעיון ולמידה.
-     **מסקנה הלכתית למעשה:**
-   - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
-   - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
 """  # ה-Prompt המעודכן לסגנון למדני-ארמי עמוק
     else:  # סגנון פשוט ומונגש
         return f"""
