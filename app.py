@@ -12,11 +12,11 @@ from dotenv import load_dotenv  # ייבוא פונקציה לטעינת משת�
 import google.generativeai as genai  # ייבוא ה-SDK של Google Gemini
 
 # 2. הגדרות דף האינטרנט
-st.set_page_config(  # הגדרת תכונות הדף בדפדפן
-    page_title="סוגיה בעיון - AI תורני",  # כותרת הדף בלשונית הדפדפן
-    page_icon="📜",  # האייקון שיופיע בלשונית הדפדפן
-    layout="centered",  # פריסת הדף בצורה ממורכזת
-    initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
+st.set_page_config(
+    page_title="סוגיה בעיון - AI תורני",
+    page_icon="📜",
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
 # 3. CSS חריף המנטרל לחלוטין את ה-Auto Scroll של Streamlit
@@ -26,7 +26,7 @@ st.markdown(
     /* 1. איפוס הגלישה הכפויה של Streamlit */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
         scroll-behavior: auto !important;
-        overflow-anchor: none !important; /* מונע מהדפדפן להינעל על אלמנטים בתחתית הדף */
+        overflow-anchor: none !important;
     }
 
     /* 2. שמירה על פריסת LTR במעטפת המערכת למניעת עיוותים */
@@ -75,114 +75,119 @@ st.markdown(
 )
 
 # 4. טעינת מפתח ה-API
-load_dotenv()  # טעינת המשתנים מקובץ .env במידה וקיים
+load_dotenv()
 
-api_key = None  # אתחול המשתנה למפתח ה-API
+api_key = None
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
+elif "GOOGLE_API_KEY" in st.secrets:
+    api_key = str(st.secrets["GOOGLE_API_KEY"]).strip()
+else:
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-if "GEMINI_API_KEY" in st.secrets:  # בדיקה אם המפתח מוגדר ב-Secrets של Streamlit
-    api_key = str(st.secrets["GEMINI_API_KEY"]).strip()  # חילוץ המפתח ואיפוס רווחים
-elif "GOOGLE_API_KEY" in st.secrets:  # בדיקת שם מפתח חלופי ב-Secrets
-    api_key = str(st.secrets["GOOGLE_API_KEY"]).strip()  # חילוץ המפתח החלופי
-else:  # אם לא נמצא ב-Secrets, ניסיון טעינה ממשתני הסביבה
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")  # חילוץ ממשתני סביבה
+if not api_key:
+    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
+    st.stop()
 
-if not api_key:  # במידה ולא נמצא מפתח כלל
-    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")  # הצגת הודעת שגיאה
-    st.stop()  # עצירת הרצת האפליקציה
+genai.configure(api_key=api_key)
 
-genai.configure(api_key=api_key)  # הגדרת המפתח עבור ספריית גוגל
-
-# 5. מנגנון שליפת מקורות מ-Sefaria API מבוסס Caching לשיפור המהירות
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_from_sefaria(query: str) -> str:  # הגדרת פונקציה לשליפת מקורות מספריא
-    try:  # תחילת בלוק טיפול בשגיאות
-        url = "https://www.sefaria.org/api/v2/search/text"  # כתובת ה-API של ספריא לחיפוש טקסט
-        payload = {  # הגדרת הנתונים שנשלחים בבקשה
-            "query": query,  # שאילתת החיפוש
-            "type": "text",  # סוג החיפוש
-            "field": "exact",  # חיפוש מדויק
-            "size": 5  # כמות התוצאות המרבית להחזרה
-        }
-        response = requests.post(url, json=payload, timeout=5)  # שליחת הבקשה ל-API עם מגבלת זמן מקוצרת ל-5 שניות
-        
-        if response.status_code == 200:  # בדיקה אם הבקשה הצליחה (קוד 200)
-            data = response.json()  # המרת התשובה מ-JSON למילון פייתון
-            hits = data.get("hits", {}).get("hits", [])  # חילוץ רשימת התוצאות
-            
-            if not hits:  # אם לא נתקבלו תוצאות
-                return "לא נמצאו מקורות תואמים בספריא."  # החזרת הודעה על חוסר תוצאות
-            
-            results = []  # רשימה לאחסון המקורות המעובדים
-            for hit in hits:  # לולאה על התוצאות שנמצאו
-                source = hit.get("_source", {})  # חילוץ אובייקט המקור
-                title = source.get("ref", "")  # חילוץ מראה המקום (כותרת הספר/מסכת)
-                he_text = source.get("he", "")  # חילוץ הטקסט בעברית
-                
-                if isinstance(he_text, str) and he_text.strip():  # בדיקה שהטקסט תקין ואינו ריק
-                    clean_text = re.sub(r'<[^>]+>', '', he_text)  # ניקוי תגיות HTML מהטקסט
-                    results.append(f"מקור מתוך ספריא [{title}]:\n\"{clean_text}\"")  # הוספת המקור לרשימה
-            
-            if results:  # אם נאספו מקורות מעובדים
-                return "\n\n".join(results)  # חיבור כל המקורות לטקסט אחד עם מרווחים
-                
-    except Exception as e:  # תפיסת שגיאה במידה והתרחשה
-        return f"לא ניתן היה לשלוף מקורות מספריא: {str(e)}"  # החזרת הודעת השגיאה
-    
-    return "לא נמצאו מקורות ספציפיים בספריא."  # ברירת מחדל במידה ולא הוחזר טקסט
-
-# 6. מנגנון שליפה משולב (טעינת מאגר לזיכרון + חיפוש מקבילי)
+# 5. טעינת המאגר ויצירת אינדקס מילים מראש (Inverted Index) בזיכרון לחיפוש מיידי
 @st.cache_data
-def load_torah_database():  # טעינת מאגר הנתונים המקומי לזיכרון פעם אחת בלבד
-    db_path = os.path.join("data", "torah_database.json")  # בניה של נתיב הקובץ
-    if os.path.exists(db_path):  # בדיקה אם הקובץ קיים
-        try:  # ניסיון לקרוא את הקובץ
-            with open(db_path, "r", encoding="utf-8") as f:  # פתיחת הקובץ בקידוד UTF-8
-                return json.load(f)  # טעינת והחזרת נתוני ה-JSON
-        except Exception:  # במקרה של שגיאה בטעינה
-            pass  # התעלמות והמשך
-    return []  # החזרת רשימה ריקה אם הקובץ לא קיים או שנכשל
+def load_and_index_database():
+    db_path = os.path.join("data", "torah_database.json")
+    if not os.path.exists(db_path):
+        return [], {}
+    try:
+        with open(db_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        word_index = {}
+        for idx, item in enumerate(data):
+            content = item.get("content", "") + " " + item.get("book", "")
+            words = set(re.findall(r'\w+', content))
+            for w in words:
+                if len(w) > 2:
+                    word_index.setdefault(w, set()).add(idx)
+        return data, word_index
+    except Exception:
+        return [], {}
 
-def search_local_database(query: str) -> str:  # פונקציה לחיפוש מהיר במאגר המקומי
-    database = load_torah_database()  # טעינת המאגר מהזיכרון
-    if not database:
+# 6. חיפוש מקומי מהיר במאגר מבוסס אינדקס
+def search_local_database_fast(query: str) -> str:
+    database, word_index = load_and_index_database()
+    if not database or not word_index:
         return ""
         
-    query_words = [w for w in query.split() if len(w) > 2]  # פירוק השאילתה למילים
-    matched_local = []  # רשימה לתוצאות מהמאגר המקומי
-    
-    for item in database:  # מעבר על המאגר
-        content = item.get("content", "")
-        book = item.get("book", "")
-        if any(word in content or word in book for word in query_words):
-            source_info = f"מקור מקומי: {book} "
+    query_words = [w for w in re.findall(r'\w+', query) if len(w) > 2]
+    if not query_words:
+        return ""
+        
+    matching_indices = set()
+    for w in query_words:
+        if w in word_index:
+            matching_indices.update(word_index[w])
             
-            masechet = item.get("masechet")
-            daf = item.get("daf")
-            siman = item.get("siman")
-            seif = item.get("seif")
-            
-            if masechet: source_info += f"מסכת {masechet} "
-            if daf: source_info += f"דף {daf} "
-            if siman: source_info += f"סימן {siman} "
-            if seif: source_info += f"סעיף {seif} "
-                
-            source_info += f"\nתוכן המקור: \"{content}\""
-            matched_local.append(source_info)
-            
-    return "\n\n".join(matched_local) if matched_local else ""
+    if not matching_indices:
+        return ""
 
-def retrieve_all_context(query: str) -> str:  # פונקציה לרכז את כל התוכן על ידי שליפה מקבילית
+    matched_local = []
+    for idx in list(matching_indices)[:3]:  # הגבלה ל-3 תוצאות הרלוונטיות ביותר
+        item = database[idx]
+        source_info = f"מקור מקומי: {item.get('book', '')} "
+        if item.get("masechet"): source_info += f"מסכת {item.get('masechet')} "
+        if item.get("daf"): source_info += f"דף {item.get('daf')} "
+        if item.get("siman"): source_info += f"סימן {item.get('siman')} "
+        if item.get("seif"): source_info += f"סעיף {item.get('seif')} "
+        
+        content = item.get('content', '')
+        source_info += f"\nתוכן: \"{content[:300]}...\"" if len(content) > 300 else f"\nתוכן: \"{content}\""
+        matched_local.append(source_info)
+        
+    return "\n\n".join(matched_local)
+
+# 7. פנייה לספריא API עם Timeout מקוצר (1.5 שניות בלבד מונע תקיעות רשת)
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_from_sefaria_fast(query: str) -> str:
+    try:
+        url = "https://www.sefaria.org/api/v2/search/text"
+        payload = {
+            "query": query,
+            "type": "text",
+            "field": "exact",
+            "size": 3
+        }
+        response = requests.post(url, json=payload, timeout=1.5)
+        
+        if response.status_code == 200:
+            hits = response.json().get("hits", {}).get("hits", [])
+            results = []
+            for hit in hits[:3]:
+                source = hit.get("_source", {})
+                title = source.get("ref", "")
+                he_text = source.get("he", "")
+                
+                if isinstance(he_text, str) and he_text.strip():
+                    clean_text = re.sub(r'<[^>]+>', '', he_text)
+                    results.append(f"מקור מתוך ספריא [{title}]:\n\"{clean_text}\"")
+            
+            if results:
+                return "\n\n".join(results)
+    except Exception:
+        pass  # במידה וחרג מפרק הזמן או נכשל - ממשיכים הלאה מיד ללא תקיעה
+    return ""
+
+# 8. שליפת מקורות מקבילית ומהירה
+def retrieve_all_context(query: str) -> str:
     context_parts = []
     
-    # הרצת השליפה מספריא והחיפוש המקומי במקביל לחיסכון משמעותי בזמן
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_sefaria = executor.submit(fetch_from_sefaria, query)
-        future_local = executor.submit(search_local_database, query)
+        future_sefaria = executor.submit(fetch_from_sefaria_fast, query)
+        future_local = executor.submit(search_local_database_fast, query)
         
         sefaria_data = future_sefaria.result()
         local_data = future_local.result()
         
-    if "לא נמצאו" not in sefaria_data and "לא ניתן" not in sefaria_data:
+    if sefaria_data:
         context_parts.append(f"--- מקורות מדויקים מספריא (כולל ניקוד) ---\n{sefaria_data}")
         
     if local_data:
@@ -192,8 +197,8 @@ def retrieve_all_context(query: str) -> str:  # פונקציה לרכז את כ�
         return "\n\n".join(context_parts)
     return "לא נמצאו מקורות במאגרי המידע הזמינים."
 
-# 7. יצירת System Prompt דינמי לפי סגנון הנבחר
-def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת את ה-Prompt בהתאם לסגנון הנבחר
+# 9. יצירת System Prompt דינמי לפי סגנון הנבחר
+def get_system_prompt(style_mode: str) -> str:
     base_rules = """
 כללי ברזל לציטוט ומקורות (חובה מוחלטת):
 1. כאשר אתה מביא ציטוט מתוך המקורות שנשלפו מספריא או מהמאגר המקומי, חובה עליך להביא אותו מילה במילה בדיוק מוחלט כפי שהוא מופיע במקור!
@@ -202,9 +207,9 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 4. ציין תמיד בצמוד לכל ציטוט את מראה המקום המדויק שלו.
 5. אסור להמציא מקורות, ציטוטים, ניקוד או שמות ספרים שלא קיימים!
 6. בכל סוף תשובה, חובה לסיים במשפט הבא בדיוק: "והכל הוא רק לעיון ולמידה, ולהלכה למעשה יש לשאול רב מורה הוראה."
-"""  # כללי היסוד הלמדניים המשותפים לכל הסגנונות
+"""
 
-    if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":  # התאמה לפי בחירת המשתמש לסגנון הישיבתי
+    if style_mode == "ישיבתי-למדני (סגנון שו\"ת)":
         return f"""
 אתה מודול AI תורני מומחה, הכותב בסגנון ישיבתי-למדני עמוק וססגוני, העשיר במטבעות לשון בארמית ובביטויי בית המדרש הקלאסיים (כדוגמת שו"תים וספרי למדנות מובהקים כגון "אבי עזרי", "אבני מילואים", "אגרות משה" ומשא ומתן ישיבתי עמוק).
 
@@ -224,7 +229,7 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 3. **דיוק ופלפול:** התחל בדיוק לשון המקור (גמרא, רמב"ם, טור או שו"ע), הקשה והקשה בין השיטות, והגדר את החקירה (גברא vs חפצא, איסור עצמי vs דין מחייב וכדומה).
 4. **חתומה וסיכום:** סיים בהכרעת הדין, בברכה תורנית קלאסית, ולאחריה משפט הסיום המחייב לעיון ולמידה.
 """
-    else:  # סגנון פשוט ומונגש
+    else:
         return f"""
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות ומחשבתיות בשפה ברורה, מופשטת ונגישה לכל לומד.
 תפקידך להציג ניתוח בהיר ומסודר מפי המקורות ועד לפסיקת ההלכה למעשה.
@@ -240,26 +245,28 @@ def get_system_prompt(style_mode: str) -> str:  # פונקציה המייצרת 
 כללי שפה: ענה בעברית תקנית, הירה ורהוטה, בצורה נגישה וקלה להבנה.
 """
 
-def analyze_sugya(messages_history, style_mode):  # פונקציית הניתוח המרכזית
+def analyze_sugya(messages_history, style_mode):
     try:
-        last_prompt = messages_history[-1]["content"]  # חילוץ ההודעה האחרונה
-        retrieved_context = retrieve_all_context(last_prompt)  # שליפת המקורות הרלוונטיים במקביל
+        last_prompt = messages_history[-1]["content"]
+        retrieved_context = retrieve_all_context(last_prompt)
         
-        system_prompt = get_system_prompt(style_mode)  # קבלת ה-System Prompt
+        system_prompt = get_system_prompt(style_mode)
         
         generation_config = {
-            "temperature": 0.0,  # אפס יצירתיות לשמירה על דיוק
+            "temperature": 0.0,
             "top_p": 0.8,
         }
         
         model = genai.GenerativeModel(
-            model_name='models/gemini-3.6-flash',  # שם המודל
+            model_name='models/gemini-3.6-flash',
             system_instruction=system_prompt,
             generation_config=generation_config
         )
 
+        # שילוב 4 ההודעות האחרונות בלבד למניעת העמסת היסטוריה איטית על המודל
         formatted_history = []
-        for msg in messages_history[:-1]:
+        recent_history = messages_history[-5:-1] if len(messages_history) > 5 else messages_history[:-1]
+        for msg in recent_history:
             role = "user" if msg["role"] == "user" else "model"
             formatted_history.append({"role": role, "parts": [msg["content"]]})
 
@@ -272,14 +279,14 @@ def analyze_sugya(messages_history, style_mode):  # פונקציית הניתו�
 שאלה לניתוח: {last_prompt}
 """
 
-        response = chat.send_message(prompt_with_context)  # שליחת ההודעה למודל
-        return response.text  # החזרת הטקסט המלא
+        response = chat.send_message(prompt_with_context)
+        return response.text
 
     except Exception as e:
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 8. ניהול היסטוריית השיחות ב-session_state
+# 10. ניהול היסטוריית השיחות ב-session_state
 if "chats" not in st.session_state:
     st.session_state.chats = {}
 
@@ -296,7 +303,7 @@ def create_new_chat():
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
     st.session_state.current_chat_id = new_id
 
-# 9. סרגל צד (Sidebar)
+# 11. סרגל צד (Sidebar)
 with st.sidebar:
     st.title("⚙️ הגדרות")
     
@@ -333,7 +340,7 @@ with st.sidebar:
             st.session_state.current_chat_id = selected_id
             st.rerun()
 
-# 10. עיצוב הממשק והצגת השיחה הנוכחית
+# 12. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
 st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")
 
@@ -349,7 +356,6 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
 
     current_chat["messages"].append({"role": "user", "content": prompt})
     
-    # הזרקת סקריפט JavaScript שמתקין שומר (Lock) מתמיד על הגלישה
     components.html(
         """
         <script>
@@ -395,7 +401,6 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
             "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
         ]
 
-        # שימוש ברכיב st.status עם דחיפת שינויים בלייב ובדיקת סיום מהירה (sleep קצר)
         with st.status(messages_list[0], expanded=False) as status:
             with ThreadPoolExecutor() as executor:
                 future = executor.submit(analyze_sugya, current_chat["messages"], style_mode)
@@ -404,15 +409,13 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
                 last_update = time.time()
                 
                 while not future.done():
-                    # עדכון הטקסט בתיבה בלייב מדי 2.5 שניות
                     if time.time() - last_update >= 2.5:
                         idx += 1
                         current_msg = messages_list[idx % len(messages_list)]
                         status.update(label=current_msg)
                         last_update = time.time()
                     
-                    # בדיקת דופק מהירה מדי 0.1 שניות להצגת התשובה מיד כשהיא מוכנה
-                    time.sleep(0.1)
+                    time.sleep(0.1)  # בדיקת דופק קצרה לזיהוי סיום מיידי
                 
                 answer = future.result()
 
