@@ -18,13 +18,13 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     initial_sidebar_state="collapsed"  # סרגל הצד מוסתר ברירת מחדל במובייל
 )
 
-# הוספת CSS מבוקר: מונע את מריחת האותיות במרכז המסך בנייד
+# הוספת CSS מבוקר + תיקון גלישה אוטומטית לתחילת התשובה
 st.markdown(
     """
     <style>
     /* 1. איפוס מעטפת האפליקציה למניעת מריחה ועיקום של הפריסה בנייד */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        direction: ltr !important; /* שמירה על LTR במעטפת ה-Grid של המערכת כדי מנע שבירת רכיבים */
+        direction: ltr !important; /* שמירה על LTR במעטפת ה-Grid של המערכת כדי למנוע שבירת רכיבים */
     }
 
     /* 2. החלת RTL אך ורק על אזורי תוכן וטקסט בלבד */
@@ -36,7 +36,7 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* 3. תיקון סרגל הצד (Sidebar) במובייל - מניעת התכווצות למרכז */
+    /* 3. תיקון סרגל הצד (Sidebar) במובייל */
     [data-testid="stSidebar"] {
         direction: rtl !important;
         text-align: right !important;
@@ -281,7 +281,7 @@ def create_new_chat():  # פונקציה ליצירת שיחה חדשה
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}  # שמירת השיחה הריקה
     st.session_state.current_chat_id = new_id  # מעבר לשיחה החדשה
 
-# 8. סרגל צד (Sidebar) - תפריט מוגן ממעיכות
+# 8. סרגל צד (Sidebar)
 with st.sidebar:  # פתיחת אזור סרגל הצד
     st.title("⚙️ הגדרות")  # כותרת הגדרות בסרגל הצד
     
@@ -309,7 +309,6 @@ with st.sidebar:  # פתיחת אזור סרגל הצד
     }
 
     if active_chats:
-        # שימוש ב-selectbox מבטיח תפריט נגלל יחיד ומונע לחלוטין מריחת כפתורים במרכז
         selected_id = st.selectbox(
             "בחר שיחה מהרשימה:",
             options=list(active_chats.keys()),
@@ -317,7 +316,6 @@ with st.sidebar:  # פתיחת אזור סרגל הצד
             index=list(active_chats.keys()).index(st.session_state.current_chat_id)
         )
         
-        # עדכון השיחה הנבחרת בעת שינוי
         if selected_id != st.session_state.current_chat_id:
             st.session_state.current_chat_id = selected_id
             st.rerun()
@@ -339,6 +337,9 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
     current_chat["messages"].append({"role": "user", "content": prompt})  # הוספת הודעת המשתמש לזיכרון
     with st.chat_message("user"):  # יצירת בועת הודעה של המשתמש
         st.markdown(prompt)  # הצגת הודעת המשתמש במסך
+
+    # יצירת אלמנט עוגן המאפשר למקד את המסך בתחילת התשובה
+    st.markdown('<div id="assistant-response-start"></div>', unsafe_allow_html=True)
 
     with st.chat_message("assistant"):  # יצירת בועת הודעה של העוזר
         status_placeholder = st.empty()  # יצירת אזור דינמי שניתן לעדכן או לנקות
@@ -370,5 +371,18 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):  
         if answer:  # אם הוחזרה תשובה תקינה מהמודל
             st.markdown(answer)  # הצגת התשובה על המסך
             current_chat["messages"].append({"role": "assistant", "content": answer})  # שמירת תשובת העוזר בהיסטוריה
+            
+            # הרצת גלישה אוטומטית חלקות ישירות לתחילת התשובה החדשה (כמו ב-Gemini)
+            st.components.v1.html(
+                """
+                <script>
+                    var target = window.parent.document.getElementById("assistant-response-start");
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                </script>
+                """,
+                height=0
+            )
         else:  # במידה וארעה שגיאה ולא התקבלה תשובה
             st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")  # הצגת הודעת שגיאה
