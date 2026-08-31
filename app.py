@@ -17,7 +17,7 @@ st.set_page_config(  # הגדרת תכונות הדף בדפדפן
     layout="centered"  # פריסת הדף בצורה ממורכזת
 )
 
-# הוספת CSS מתוקן: מבטיח RTL מלא במחשב ושומר על סרגל הצד במובייל שלא יימעך
+# הוספת CSS מתוקן: מונע מעיכה במובייל ושומר על RTL מלא במחשב
 st.markdown(
     """
     <style>
@@ -27,9 +27,8 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* 2. הגדרת RTL לסרגל הצד מבלי לפגוע במידות שלו במובייל */
+    /* 2. הגדרת RTL פנימית בסרגל הצד מבלי לשבור את מבנה ה-Flex/Grid בנייד */
     [data-testid="stSidebar"] {
-        direction: rtl !important;
         text-align: right !important;
     }
     
@@ -38,13 +37,18 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* 3. יישור טקסט, כותרות והודעות צ'אט */
+    /* 3. שמירה על כיווניות ניווט סרגל הצד */
+    [data-testid="stSidebarNav"] {
+        direction: rtl !important;
+    }
+
+    /* 4. יישור טקסט, כותרות והודעות צ'אט */
     [data-testid="stChatMessage"], [data-testid="stChatInput"], .stMarkdown, p, h1, h2, h3, h4, label {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* 4. תיקון תצוגת רשימות (נקודות/מספרים) ב-RTL */
+    /* 5. תיקון תצוגת רשימות (נקודות/מספרים) ב-RTL */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
@@ -52,10 +56,18 @@ st.markdown(
         padding-left: 0rem !important;
     }
 
-    /* 5. מניעת בחירת טקסט בכפתורי סרגל הצד */
+    /* 6. תיקון כפתורים בסרגל הצד: מניעת מעיכת אותיות ואיפוס גלישה בנייד */
     [data-testid="stSidebar"] button {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
         user-select: none;
         -webkit-user-select: none;
+    }
+
+    [data-testid="stSidebar"] button p {
+        word-break: break-word !important;
+        white-space: normal !important;
     }
     </style>
     """,
@@ -311,7 +323,7 @@ with st.sidebar:  # פתיחת אזור סרגל הצד
             st.session_state.current_chat_id = c_id  # עדכון המזהה הפעיל
             st.rerun()  # רענון המסך להצגת השיחה הנבחרת
 
-# JavaScript למחיקה
+# JavaScript למחיקת שיחות בלחיצה ארוכה / מקש ימני
 st.components.v1.html(  # הזרקת רכיב ה-JavaScript המותאם אישית
     """
     <script>
