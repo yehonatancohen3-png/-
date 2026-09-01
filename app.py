@@ -206,7 +206,7 @@ def get_system_prompt(style_mode: str) -> str:
 
 הנחיות חובה לכתיבה בסגנון זה:
 1. **שפה תלמודית וארמית:** עשה שימוש תדיר בביטויי בית המדרש ובארמית:
-   - "והנה באה לפנינו שאלה..." / "הנה גרסינן בגמרא..."
+   - "והנה באה לפנינו שאלה..." / "והנה גרסינן בגמרא..."
    - "ולכאורה יש לדון בזה מכמה צדדים עיקריים..."
    - "ופשוט דבמקום..." / "איכא למיחש טובא..."
    - "והנה יש לחקור בזה..." / "ואף דלכאורה היה נראה לומר..."
@@ -318,6 +318,9 @@ if "data_loaded" not in st.session_state:
         
     st.session_state.data_loaded = True
 
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
+
 def create_new_chat(project_name):
     new_id = str(uuid.uuid4())
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": [], "project": project_name}
@@ -325,7 +328,11 @@ def create_new_chat(project_name):
     st.session_state.current_chat_id = new_id
     save_user_data()
 
-# 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini עם חיפוש עקבי
+# פונקציית Callback לעדכון ערך החיפוש מידית בלי לגרום לריסטרט מיותר של הווידג'ט
+def update_search():
+    st.session_state.search_query = st.session_state.search_input_box
+
+# 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini עם חיפוש עקבי שלא מתאפס
 with st.sidebar:
     
     # --- כפתור בולט לשיחה חדשה כמו ב-Gemini ---
@@ -333,23 +340,17 @@ with st.sidebar:
         create_new_chat(st.session_state.current_project)
         st.rerun()
     
-    # --- שורת חיפוש עקבית ---
+    # --- שורת חיפוש עקבית המקושרת ל-Callback ---
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-    
-    if "search_query" not in st.session_state:
-        st.session_state.search_query = ""
 
-    search_query = st.text_input(
+    st.text_input(
         "חיפוש", 
         value=st.session_state.search_query, 
         placeholder="🔍 חפש שיחה...", 
         label_visibility="collapsed",
-        key="search_input_box"
+        key="search_input_box",
+        on_change=update_search
     )
-    
-    if search_query != st.session_state.search_query:
-        st.session_state.search_query = search_query
-        st.rerun()
 
     st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
@@ -372,19 +373,20 @@ with st.sidebar:
     # --- תצוגת רשימת התיקיות (פרויקטים) והשיחות שבתוכן ---
     for proj_name, chat_ids in list(st.session_state.projects.items()):
         
-        # סינון שיחות ע"פ החיפוש
+        # סינון שיחות ע"פ החיפוש העדכני מתוך ה-Session State
+        current_search = st.session_state.search_query.lower()
         filtered_chats = [
             cid for cid in chat_ids 
             if cid in st.session_state.chats and 
-            (search_query.lower() in st.session_state.chats[cid]["title"].lower() or search_query == "")
+            (current_search in st.session_state.chats[cid]["title"].lower() or current_search == "")
         ]
         
-        # דילוג על תיקיות שאין בהן תוצאות חיפוש אם התבצע חיפוש
-        if search_query and not filtered_chats:
+        # דילוג על תיקיות שאין בהן תוצאות חיפוש אם התבצע חיפוש פעיל
+        if current_search and not filtered_chats:
             continue
 
-        # קביעה האם התיקייה תהיה פתוחה - רק התיקייה הפעילה פתוחה, או אם מבצעים חיפוש
-        is_expanded = (proj_name == st.session_state.current_project) or bool(search_query)
+        # קביעה האם התיקייה תהיה פתוחה - אם יש בה שיחות תואמות חיפוש או שהיא התיקייה הפעילה
+        is_expanded = (proj_name == st.session_state.current_project) or bool(current_search)
         
         with st.expander(f"📂 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
             
