@@ -49,7 +49,7 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* עיצוב כפתורי סרגל הצד כטקסט נקי */
+    /* עיצוב כפתורי סרגל הצד כטקסט נקי ברקע שקוף */
     [data-testid="stSidebar"] button {
         border: none !important;
         background: transparent !important;
@@ -57,6 +57,7 @@ st.markdown(
         justify-content: flex-start !important;
         padding: 6px 12px !important;
         box-shadow: none !important;
+        width: 100% !important;
     }
 
     [data-testid="stSidebar"] button:hover {
@@ -64,16 +65,17 @@ st.markdown(
         border-radius: 20px !important;
     }
 
-    /* עיצוב כפתור פרויקט מודגש */
+    /* עיצוב כרטיסיית הפרויקט המודגשת בדיוק כפי שמופיע ב-Gemini */
     .project-card {
         background-color: #f0f4f9;
         border-radius: 20px;
         padding: 10px 14px;
         margin: 6px 0;
-        font-weight: 500;
+        font-weight: 600;
         display: flex;
         align-items: center;
         gap: 8px;
+        color: #1f1f1f;
     }
     </style>
     """,
@@ -263,7 +265,7 @@ def analyze_sugya(messages_history):
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 7. ניהול נתונים ב-session_state
+# 7. אתחול נתונים ב-session_state
 if "notebooks" not in st.session_state:
     st.session_state.notebooks = ["פרוייקט - מודול AI סוגיה בעיון"]
 
@@ -283,9 +285,8 @@ def create_new_chat():
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
     st.session_state.current_chat_id = new_id
 
-# 8. סרגל צד (Sidebar) מעוצב בדיוק לפי התמונה
+# 8. סרגל צד (Sidebar) מעוצב במבנה של Gemini
 with st.sidebar:
-    # כותרת עליונה - Gemini
     st.markdown("## ✨ Gemini")
     st.write("")
 
@@ -298,11 +299,11 @@ with st.sidebar:
         st.session_state.search_term = st.text_input("חפש בשיחות:", value=st.session_state.search_term)
 
     if st.button("🎛️  ספרייה", use_container_width=True):
-        st.info("ספריית המקורות זמינה ברקע.")
+        st.info("ספריית המקורות פעילה ומחוברת לספריא בזמן אמת.")
 
     st.write("")
 
-    # מקטע 2: תיקיות Notebook
+    # מקטע 2: תיקיות Notebook / פרויקטים
     st.caption("תיקיות Notebook")
     
     with st.popover("➕  תיקיית Notebook חדשה", use_container_width=True):
@@ -312,7 +313,6 @@ with st.sidebar:
                 st.session_state.notebooks.append(new_folder)
                 st.rerun()
 
-    # הצגת התיקייה/הפרויקט הראשי בולט כמו בתמונה
     for nb in st.session_state.notebooks:
         st.markdown(f'<div class="project-card">📙 {nb}</div>', unsafe_allow_html=True)
 
@@ -321,7 +321,6 @@ with st.sidebar:
     # מקטע 3: מהזמן האחרון (היסטוריית שיחות)
     st.caption("מהזמן האחרון")
 
-    # סינון שיחות לפי מונח חיפוש במידה והוזן
     filtered_chats = {
         c_id: c_data for c_id, c_data in st.session_state.chats.items()
         if st.session_state.search_term.lower() in c_data["title"].lower()
@@ -357,7 +356,6 @@ for message in current_chat["messages"]:
         st.markdown(message["content"])
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    # עדכון כותרת השיחה לפי השאלה הראשונה
     if not current_chat["messages"] or current_chat["title"] == "שיחה חדשה":
         current_chat["title"] = prompt[:30] + ("..." if len(prompt) > 30 else "")
 
@@ -378,7 +376,6 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
             "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
         ]
 
-        # הרצת חישוב התשובה ברקע
         with ThreadPoolExecutor() as executor:
             future = executor.submit(analyze_sugya, current_chat["messages"])
             
