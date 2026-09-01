@@ -271,27 +271,59 @@ def analyze_sugya(messages_history, style_mode):
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 7. ניהול פרויקטים ושיחות ב-Session State
-if "projects" not in st.session_state:
-    st.session_state.projects = {"פרויקט ראשי": []}
+# 7. מערכת שמירת נתונים מקומית (Persistence)
+USER_DATA_FILE = os.path.join("data", "user_data.json")
 
-if "current_project" not in st.session_state:
-    st.session_state.current_project = "פרויקט ראשי"
+def load_user_data():
+    if os.path.exists(USER_DATA_FILE):
+        try:
+            with open(USER_DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
 
-if "chats" not in st.session_state:
-    st.session_state.chats = {}
+def save_user_data():
+    os.makedirs("data", exist_ok=True)
+    data = {
+        "projects": st.session_state.projects,
+        "chats": st.session_state.chats,
+        "current_project": st.session_state.current_project,
+        "current_chat_id": st.session_state.current_chat_id
+    }
+    with open(USER_DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-if "current_chat_id" not in st.session_state:
-    new_id = str(uuid.uuid4())
-    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": [], "project": "פרויקט ראשי"}
-    st.session_state.projects["פרויקט ראשי"].append(new_id)
-    st.session_state.current_chat_id = new_id
+# אתחול Session State מטעינת הקובץ
+if "data_loaded" not in st.session_state:
+    saved_data = load_user_data()
+    if saved_data:
+        st.session_state.projects = saved_data.get("projects", {"פרויקט ראשי": []})
+        st.session_state.chats = saved_data.get("chats", {})
+        st.session_state.current_project = saved_data.get("current_project", "פרויקט ראשי")
+        st.session_state.current_chat_id = saved_data.get("current_chat_id", None)
+    else:
+        st.session_state.projects = {"פרויקט ראשי": []}
+        st.session_state.chats = {}
+        st.session_state.current_project = "פרויקט ראשי"
+        st.session_state.current_chat_id = None
+    
+    # הבטחה שלפחות שיחה אחת קיימת
+    if not st.session_state.current_chat_id or st.session_state.current_chat_id not in st.session_state.chats:
+        new_id = str(uuid.uuid4())
+        st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": [], "project": "פרויקט ראשי"}
+        st.session_state.projects["פרויקט ראשי"].append(new_id)
+        st.session_state.current_chat_id = new_id
+        save_user_data()
+        
+    st.session_state.data_loaded = True
 
 def create_new_chat(project_name):
     new_id = str(uuid.uuid4())
     st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": [], "project": project_name}
     st.session_state.projects[project_name].append(new_id)
     st.session_state.current_chat_id = new_id
+    save_user_data()
 
 # 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini
 with st.sidebar:
@@ -323,7 +355,7 @@ with st.sidebar:
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
     # --- תצוגת רשימת התיקיות (פרויקטים) והשיחות שבתוכן ---
-    for proj_name, chat_ids in st.session_state.projects.items():
+    for proj_name, chat_ids in list(st.session_state.projects.items()):
         
         # סינון שיחות ע"פ החיפוש
         filtered_chats = [
@@ -364,6 +396,7 @@ with st.sidebar:
                                 create_new_chat(st.session_state.current_project)
                             else:
                                 st.session_state.current_chat_id = st.session_state.projects[st.session_state.current_project][-1]
+                            save_user_data()
                             st.rerun()
             
             st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
@@ -382,6 +415,7 @@ with st.sidebar:
                     if st.button(f"💬 {chat_title}", key=f"btn_{cid}", use_container_width=True, type=btn_type):
                         st.session_state.current_chat_id = cid
                         st.session_state.current_project = proj_name
+                        save_user_data()
                         st.rerun()
                         
                 with col_menu:
@@ -392,6 +426,7 @@ with st.sidebar:
                         if st.button("💾 שמור", key=f"rn_btn_{cid}", use_container_width=True):
                             if new_name:
                                 st.session_state.chats[cid]["title"] = new_name
+                                save_user_data()
                                 st.rerun()
                                 
                         st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
@@ -407,9 +442,10 @@ with st.sidebar:
                                     st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
                                 else:
                                     create_new_chat(proj_name)
+                            save_user_data()
                             st.rerun()
 
-    # --- תפריט תחתון להגדרות אפליקציה (כמו כפתור Settings ב-Gemini) ---
+    # --- תפריט תחתון להגדרות אפליקציה ---
     st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
     style_mode = st.radio(
         "⚙️ הגדרות: סגנון תשובה",
@@ -429,10 +465,14 @@ for message in current_chat["messages"]:
         st.markdown(message["content"])
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
+    # עדכון כותרת השיחה אם זו ההודעה הראשונה
     if not current_chat["messages"]:
         current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
+        save_user_data()
 
     current_chat["messages"].append({"role": "user", "content": prompt})
+    save_user_data()
+    
     with st.chat_message("user"):
         st.markdown(prompt)
 
@@ -466,5 +506,6 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
         if answer:
             st.markdown(answer)
             current_chat["messages"].append({"role": "assistant", "content": answer})
+            save_user_data()
         else:
             st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")
