@@ -15,39 +15,59 @@ st.set_page_config(
     layout="centered"
 )
 
-# CSS ליישור RTL ועיצוב כפתורי הפרויקטים והשיחות בסגנון Gemini
+# 2. CSS מתוקן מקיף: תמיכה מלאה במובייל, מניעת מעיכת אותיות, וסרגל צד תקין
 st.markdown(
     """
     <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+    /* 1. הגדרת RTL כללית לתצוגה */
+    .stApp, .stAppHeader, [data-testid="stAppViewContainer"] {
         direction: rtl !important;
+        text-align: right !important;
+    }
+
+    /* 2. הגדרת סרגל צד (Sidebar) ותמיכה בכפתור התפריט בנייד */
+    [data-testid="stSidebar"] {
         text-align: right !important;
     }
     
-    [data-testid="stChatMessage"], [data-testid="stChatInput"], div[data-baseweb="input"] {
+    [data-testid="stSidebarContent"] {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    h1, h2, h3, h4, h5, h6, p, div, span, label, .stMarkdownContainer, .stMarkdown {
+    [data-testid="stSidebarNav"] {
+        direction: rtl !important;
+    }
+
+    /* 3. יישור טקסט והודעות צ'אט במרכז המסך */
+    [data-testid="stChatMessage"], [data-testid="stChatInput"], .stMarkdown, p, h1, h2, h3, h4, label {
         direction: rtl !important;
         text-align: right !important;
     }
 
+    /* 4. תיקון תצוגת רשימות */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
         padding-right: 1.5rem !important;
         padding-left: 0rem !important;
-        margin-right: 0rem !important;
     }
 
-    li {
-        direction: rtl !important;
-        text-align: right !important;
+    /* 5. תיקון מבוסס מובייל: מניעת מעיכת טקסט ומילים מרוחות בכפתורים */
+    [data-testid="stSidebar"] button, div[data-testid="stForm"] button {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        user-select: none;
+        -webkit-user-select: none;
     }
 
-    /* עיצוב כפתורי סרגל הצד */
+    [data-testid="stSidebar"] button p {
+        word-break: break-word !important;
+        white-space: normal !important;
+    }
+
+    /* עיצוב כפתורי סרגל הצד בסגנון Gemini */
     [data-testid="stSidebar"] button {
         border: none !important;
         background: transparent !important;
@@ -60,7 +80,7 @@ st.markdown(
 
     [data-testid="stSidebar"] button:hover {
         background-color: #f0f4f9 !important;
-        border-radius: 20px !important;
+        border-radius: 12px !important;
     }
 
     /* הדגשת פרויקט פעיל */
@@ -68,18 +88,18 @@ st.markdown(
         background-color: #e8f0fe !important;
         color: #1a73e8 !important;
         font-weight: bold !important;
-        border-radius: 20px !important;
+        border-radius: 12px !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# 2. ניהול Executor גלובלי להרצת משימות ברקע (גם בעת מעבר דפים)
+# 3. ניהול Executor גלובלי להרצת משימות ברקע
 if "executor" not in st.session_state:
     st.session_state.executor = ThreadPoolExecutor(max_workers=4)
 
-# 3. טעינת מפתח ה-API
+# 4. טעינת מפתח ה-API
 load_dotenv()
 
 api_key = None
@@ -96,7 +116,7 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
-# 4. מנגנון שליפת מקורות מ-Sefaria API
+# 5. מנגנוני שליפת מקורות (ספריא ומאגר מקומי)
 def fetch_from_sefaria(query: str) -> str:
     try:
         url = "https://www.sefaria.org/api/v2/search/text"
@@ -121,7 +141,6 @@ def fetch_from_sefaria(query: str) -> str:
         return f"לא ניתן היה לשלוף מקורות מספריא: {str(e)}"
     return "לא נמצאו מקורות ספציפיים בספריא."
 
-# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
 def load_torah_database():
     db_path = os.path.join("data", "torah_database.json")
     if os.path.exists(db_path):
@@ -155,7 +174,7 @@ def retrieve_all_context(query: str) -> str:
         context_parts.append(f"--- מקורות מהמאגר המקומי ---\n" + "\n\n".join(matched_local))
     return "\n\n".join(context_parts) if context_parts else "לא נמצאו מקורות במאגרי המידע הזמינים."
 
-# 6. System Prompt
+# 6. System Prompt ותהליך הניתוח ברקע
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
 תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
@@ -175,7 +194,6 @@ SYSTEM_PROMPT = """
 """
 
 def analyze_sugya_worker(messages_history):
-    """פונקציה עצמאית שמורצת בתוך ה-Thread ברקע"""
     try:
         last_prompt = messages_history[-1]["content"]
         retrieved_context = retrieve_all_context(last_prompt)
@@ -199,7 +217,7 @@ def analyze_sugya_worker(messages_history):
     except Exception as e:
         return f"שגיאה בהפעלת המודל: {str(e)}"
 
-# 7. ניהול נתונים ב-Session State (פרויקטים -> שיחות)
+# 7. אתחול וניהול היררכי ב-Session State (פרויקטים -> שיחות)
 if "projects" not in st.session_state:
     p_id = str(uuid.uuid4())
     c_id = str(uuid.uuid4())
@@ -210,7 +228,7 @@ if "projects" not in st.session_state:
                 c_id: {
                     "title": "שיחה חדשה", 
                     "messages": [],
-                    "running_future": None # שדה שמחזיק את המשימה שרצה ברקע
+                    "running_future": None
                 }
             }
         }
@@ -247,12 +265,12 @@ def create_new_chat():
     }
     st.session_state.current_chat_id = c_id
 
-# 8. סרגל צד (Sidebar) אינטראקטיבי במבנה Gemini
+# 8. סרגל צד (Sidebar)
 with st.sidebar:
     st.markdown("## ✨ Gemini")
     st.write("")
 
-    # מקטע 1: פעולות ראשיות
+    # שיחה חדשה
     if st.button("🖊️  שיחה חדשה", use_container_width=True):
         create_new_chat()
         st.rerun()
@@ -265,29 +283,42 @@ with st.sidebar:
 
     st.write("")
 
-    # מקטע 2: תיקיות Notebook / פרויקטים בלחיצה
-    st.caption("תיקיות Notebook")
+    # ניהול פרויקטים (כולל מחיקה ומעבר)
+    st.caption("תיקיות Notebook (פרויקטים)")
     
-    with st.popover("➕  תיקיית Notebook חדשה", use_container_width=True):
-        new_proj_name = st.text_input("שם התיקייה / הפרויקט:")
+    with st.popover("➕  פרויקט חדש", use_container_width=True):
+        new_proj_name = st.text_input("שם הפרויקט החדש:")
         if st.button("צור פרויקט"):
             if new_proj_name:
                 create_new_project(new_proj_name)
                 st.rerun()
 
+    # הצגת הפרויקטים עם אפשרות מחיקה ובחירה
     for p_id, p_data in list(st.session_state.projects.items()):
         is_proj_active = (p_id == st.session_state.current_project_id)
         btn_type = "primary" if is_proj_active else "secondary"
         
-        if st.button(f"📙  {p_data['name']}", key=f"proj_{p_id}", type=btn_type, use_container_width=True):
-            st.session_state.current_project_id = p_id
-            st.session_state.current_chat_id = list(p_data["chats"].keys())[0]
-            st.rerun()
+        col_proj, col_del_proj = st.columns([0.85, 0.15])
+        with col_proj:
+            if st.button(f"📙  {p_data['name']}", key=f"proj_{p_id}", type=btn_type, use_container_width=True):
+                st.session_state.current_project_id = p_id
+                # בעת מעבר פרויקט - ניגש לשיחה הראשונה בפרויקט הנבחר
+                st.session_state.current_chat_id = list(p_data["chats"].keys())[0]
+                st.rerun()
+        with col_del_proj:
+            # מחיקת פרויקט (רק אם יש יותר מפרויקט אחד)
+            if len(st.session_state.projects) > 1:
+                if st.button("🗑️", key=f"del_proj_{p_id}"):
+                    del st.session_state.projects[p_id]
+                    if is_proj_active:
+                        st.session_state.current_project_id = list(st.session_state.projects.keys())[0]
+                        st.session_state.current_chat_id = list(st.session_state.projects[st.session_state.current_project_id]["chats"].keys())[0]
+                    st.rerun()
 
     st.write("")
 
-    # מקטע 3: מהזמן האחרון (שיחות בתוך הפרויקט הנבחר כולל אינדיקציות טעינה)
-    st.caption("מהזמן האחרון")
+    # הצגת השיחות של הפרויקט הנבחר כעת
+    st.caption("שיחות בפרויקט הנוכחי")
 
     current_proj = st.session_state.projects[st.session_state.current_project_id]
     
@@ -301,14 +332,15 @@ with st.sidebar:
         is_running = c_data.get("running_future") is not None and not c_data["running_future"].done()
         
         display_title = c_data["title"] + (" ⏳" if is_running else "")
-        
-        col1, col2 = st.columns([0.85, 0.15])
-        with col1:
-            if st.button(display_title, key=f"chat_{c_id}", use_container_width=True):
+        chat_btn_type = "primary" if is_chat_active else "secondary"
+
+        col_chat, col_del_chat = st.columns([0.85, 0.15])
+        with col_chat:
+            if st.button(display_title, key=f"chat_{c_id}", type=chat_btn_type, use_container_width=True):
                 st.session_state.current_chat_id = c_id
                 st.rerun()
-        with col2:
-            if st.button("🗑️", key=f"del_{c_id}"):
+        with col_del_chat:
+            if st.button("🗑️", key=f"del_chat_{c_id}"):
                 del current_proj["chats"][c_id]
                 if not current_proj["chats"]:
                     create_new_chat()
@@ -316,15 +348,20 @@ with st.sidebar:
                     st.session_state.current_chat_id = list(current_proj["chats"].keys())[0]
                 st.rerun()
 
-# 9. עיצוב הממשק והצגת השיחה הנוכחית
+# 9. עיצוב הממשק הראשי
 st.title("📜 סוגיה בעיון")
 
 current_proj = st.session_state.projects[st.session_state.current_project_id]
+
+# וודאות שמזהה השיחה הנוכחית שייך לפרויקט הנוכחי
+if st.session_state.current_chat_id not in current_proj["chats"]:
+    st.session_state.current_chat_id = list(current_proj["chats"].keys())[0]
+
 current_chat = current_proj["chats"][st.session_state.current_chat_id]
 
-st.caption(f"פרויקט: **{current_proj['name']}** | שיחה: **{current_chat['title']}**")
+st.caption(f"פרויקט פעיל: **{current_proj['name']}** | שיחה: **{current_chat['title']}**")
 
-# בדיקת משימות שרצות ברקע בשיחה הנוכחית
+# בדיקת משימת רקע
 if current_chat.get("running_future"):
     future = current_chat["running_future"]
     if future.done():
@@ -334,21 +371,21 @@ if current_chat.get("running_future"):
         current_chat["running_future"] = None
         st.rerun()
     else:
-        st.info("⏳ יהונתן מעיין בסוגיה, תשובה תינתן בעוד כחצי דקה. ניתן לעבור לשיחות אחרות בינתיים.")
+        st.info("⏳ יהונתן מעיין בסוגיה ומריץ חיפוש ברקע... ניתן לעבור לשיחות או פרויקטים אחרים בינתיים.")
 
 # הצגת כל הודעות השיחה
 for message in current_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# קבלת קלט חדש מהמשתמש
+# קלט מהמשתמש
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     if not current_chat["messages"] or current_chat["title"] == "שיחה חדשה":
         current_chat["title"] = prompt[:30] + ("..." if len(prompt) > 30 else "")
 
     current_chat["messages"].append({"role": "user", "content": prompt})
     
-    # שליחת הבקשה ל-Worker ברקע ושמירת ה-Future בתוך השיחה
+    # הפעלת משימת הניתוח ברקע
     future = st.session_state.executor.submit(analyze_sugya_worker, current_chat["messages"].copy())
     current_chat["running_future"] = future
     
