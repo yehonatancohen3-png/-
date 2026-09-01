@@ -324,13 +324,18 @@ with st.sidebar:
     
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-    # שורת החיפוש ללא ארגומנט value כדי להימנע מאיפוס כפוף ב-rerun
-    st.text_input(
-        "חיפוש", 
-        placeholder="🔍 חפש שיחה...", 
-        label_visibility="collapsed",
-        key="search_input_box"
-    )
+    # שימוש בטופס חיפוש (st.form) המונע איפוס ומאפשר חיפוש יציב ושמור בזיכרון
+    with st.form(key="search_form", clear_on_submit=False):
+        search_query_input = st.text_input(
+            "חיפוש", 
+            value=st.session_state.get("search_input_box", ""),
+            placeholder="🔍 חפש שיחה...", 
+            label_visibility="collapsed"
+        )
+        submitted = st.form_submit_button("חפש")
+        
+        if submitted or search_query_input != st.session_state.get("search_input_box", ""):
+            st.session_state.search_input_box = search_query_input
 
     st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
