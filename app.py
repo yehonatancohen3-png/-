@@ -12,12 +12,12 @@ import google.generativeai as genai
 
 # 2. הגדרות דף האינטרנט
 st.set_page_config(
-    page_title="סוגיה בעיון - AI תורני",
-    page_icon="📜",
+    page_title="Gemini - סוגיה בעיון",
+    page_icon="✨",
     layout="centered"
 )
 
-# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL)
+# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) ועיצוב סרגל הצד תואם Gemini
 st.markdown(
     """
     <style>
@@ -47,6 +47,33 @@ st.markdown(
     li {
         direction: rtl !important;
         text-align: right !important;
+    }
+
+    /* עיצוב כפתורי סרגל הצד כטקסט נקי */
+    [data-testid="stSidebar"] button {
+        border: none !important;
+        background: transparent !important;
+        text-align: right !important;
+        justify-content: flex-start !important;
+        padding: 6px 12px !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="stSidebar"] button:hover {
+        background-color: #f0f4f9 !important;
+        border-radius: 20px !important;
+    }
+
+    /* עיצוב כפתור פרויקט מודגש */
+    .project-card {
+        background-color: #f0f4f9;
+        border-radius: 20px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     </style>
     """,
@@ -236,122 +263,93 @@ def analyze_sugya(messages_history):
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 7. ניהול היררכי: פרויקטים -> שיחות -> הודעות
-if "projects" not in st.session_state:
-    # מילון פרויקטים: {project_id: {"name": ..., "chats": {chat_id: {"title": ..., "messages": [...]}}}}
-    default_proj_id = str(uuid.uuid4())
-    default_chat_id = str(uuid.uuid4())
-    st.session_state.projects = {
-        default_proj_id: {
-            "name": "פרויקט כללי",
-            "chats": {
-                default_chat_id: {"title": "שיחה חדשה", "messages": []}
-            }
-        }
-    }
-    st.session_state.current_project_id = default_proj_id
-    st.session_state.current_chat_id = default_chat_id
+# 7. ניהול נתונים ב-session_state
+if "notebooks" not in st.session_state:
+    st.session_state.notebooks = ["פרוייקט - מודול AI סוגיה בעיון"]
 
-# פונקציות עזר לניהול פרויקטים ושיחות
-def create_new_project(name):
-    proj_id = str(uuid.uuid4())
-    chat_id = str(uuid.uuid4())
-    st.session_state.projects[proj_id] = {
-        "name": name if name.strip() else "פרויקט חדש",
-        "chats": {
-            chat_id: {"title": "שיחה חדשה", "messages": []}
-        }
-    }
-    st.session_state.current_project_id = proj_id
-    st.session_state.current_chat_id = chat_id
+if "chats" not in st.session_state:
+    st.session_state.chats = {}
+
+if "current_chat_id" not in st.session_state:
+    new_id = str(uuid.uuid4())
+    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
+    st.session_state.current_chat_id = new_id
+
+if "search_term" not in st.session_state:
+    st.session_state.search_term = ""
 
 def create_new_chat():
-    proj_id = st.session_state.current_project_id
-    chat_id = str(uuid.uuid4())
-    st.session_state.projects[proj_id]["chats"][chat_id] = {"title": "שיחה חדשה", "messages": []}
-    st.session_state.current_chat_id = chat_id
+    new_id = str(uuid.uuid4())
+    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
+    st.session_state.current_chat_id = new_id
 
-def delete_chat(chat_id):
-    proj_id = st.session_state.current_project_id
-    chats = st.session_state.projects[proj_id]["chats"]
-    if chat_id in chats:
-        del chats[chat_id]
-    if not chats:
-        create_new_chat()
-    else:
-        st.session_state.current_chat_id = list(chats.keys())[0]
-
-def delete_project(proj_id):
-    if proj_id in st.session_state.projects:
-        del st.session_state.projects[proj_id]
-    if not st.session_state.projects:
-        create_new_project("פרויקט כללי")
-    else:
-        st.session_state.current_project_id = list(st.session_state.projects.keys())[0]
-        st.session_state.current_chat_id = list(st.session_state.projects[st.session_state.current_project_id]["chats"].keys())[0]
-
-# 8. סרגל צד (Sidebar) לניהול פרויקטים ושיחות
+# 8. סרגל צד (Sidebar) מעוצב בדיוק לפי התמונה
 with st.sidebar:
-    st.title("📁 פרויקטים ושיחות")
-    
-    # 1. בחירה/יצירה של פרויקט
-    st.subheader("פרויקט נוכחי")
-    
-    project_options = {p_id: p_data["name"] for p_id, p_data in st.session_state.projects.items()}
-    selected_proj = st.selectbox(
-        "בחר פרויקט:",
-        options=list(project_options.keys()),
-        format_func=lambda x: project_options[x],
-        index=list(project_options.keys()).index(st.session_state.current_project_id)
-    )
-    
-    if selected_proj != st.session_state.current_project_id:
-        st.session_state.current_project_id = selected_proj
-        # בעת מעבר פרויקט, נבחר את השיחה הראשונה בו
-        st.session_state.current_chat_id = list(st.session_state.projects[selected_proj]["chats"].keys())[0]
+    # כותרת עליונה - Gemini
+    st.markdown("## ✨ Gemini")
+    st.write("")
+
+    # מקטע 1: פעולות ראשיות
+    if st.button("🖊️  שיחה חדשה", use_container_width=True):
+        create_new_chat()
         st.rerun()
 
-    # יצירת פרויקט חדש
-    with st.popover("➕ פרויקט חדש"):
-        new_proj_name = st.text_input("שם הפרויקט:")
-        if st.button("צור פרויקט"):
-            if new_proj_name:
-                create_new_project(new_proj_name)
+    with st.popover("🔍  חיפוש שיחות", use_container_width=True):
+        st.session_state.search_term = st.text_input("חפש בשיחות:", value=st.session_state.search_term)
+
+    if st.button("🎛️  ספרייה", use_container_width=True):
+        st.info("ספריית המקורות זמינה ברקע.")
+
+    st.write("")
+
+    # מקטע 2: תיקיות Notebook
+    st.caption("תיקיות Notebook")
+    
+    with st.popover("➕  תיקיית Notebook חדשה", use_container_width=True):
+        new_folder = st.text_input("שם התיקייה:")
+        if st.button("צור תיקייה"):
+            if new_folder and new_folder not in st.session_state.notebooks:
+                st.session_state.notebooks.append(new_folder)
                 st.rerun()
 
-    st.markdown("---")
+    # הצגת התיקייה/הפרויקט הראשי בולט כמו בתמונה
+    for nb in st.session_state.notebooks:
+        st.markdown(f'<div class="project-card">📙 {nb}</div>', unsafe_allow_html=True)
 
-    # 2. ניהול שיחות בתוך הפרויקט הנבחר
-    current_proj = st.session_state.projects[st.session_state.current_project_id]
-    st.subheader(f"💬 שיחות ב{current_proj['name']}")
-    
-    if st.button("➕ שיחה חדשה בפרויקט", use_container_width=True):
-        create_new_chat()
-        st.rerun()
+    st.write("")
 
-    st.markdown("")
+    # מקטע 3: מהזמן האחרון (היסטוריית שיחות)
+    st.caption("מהזמן האחרון")
 
-    for c_id, c_data in list(current_proj["chats"].items()):
-        col1, col2 = st.columns([0.8, 0.2])
+    # סינון שיחות לפי מונח חיפוש במידה והוזן
+    filtered_chats = {
+        c_id: c_data for c_id, c_data in st.session_state.chats.items()
+        if st.session_state.search_term.lower() in c_data["title"].lower()
+    }
+
+    for c_id, c_data in list(filtered_chats.items()):
         is_active = (c_id == st.session_state.current_chat_id)
-        btn_label = f"💬 {c_data['title']}"
+        btn_label = c_data["title"]
         
+        col1, col2 = st.columns([0.85, 0.15])
         with col1:
-            if st.button(btn_label, key=f"select_{c_id}", use_container_width=True, type="primary" if is_active else "secondary"):
+            if st.button(btn_label, key=f"chat_{c_id}", use_container_width=True):
                 st.session_state.current_chat_id = c_id
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"del_{c_id}"):
-                delete_chat(c_id)
+                del st.session_state.chats[c_id]
+                if not st.session_state.chats:
+                    create_new_chat()
+                else:
+                    st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
                 st.rerun()
 
 # 9. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
+st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")
 
-current_proj = st.session_state.projects[st.session_state.current_project_id]
-current_chat = current_proj["chats"][st.session_state.current_chat_id]
-
-st.caption(f"פרויקט: **{current_proj['name']}** | שיחה: **{current_chat['title']}**")
+current_chat = st.session_state.chats[st.session_state.current_chat_id]
 
 # הצגת כל הודעות הצ'אט של השיחה הנוכחית
 for message in current_chat["messages"]:
@@ -360,8 +358,8 @@ for message in current_chat["messages"]:
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     # עדכון כותרת השיחה לפי השאלה הראשונה
-    if not current_chat["messages"]:
-        current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
+    if not current_chat["messages"] or current_chat["title"] == "שיחה חדשה":
+        current_chat["title"] = prompt[:30] + ("..." if len(prompt) > 30 else "")
 
     current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
