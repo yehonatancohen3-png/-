@@ -15,10 +15,10 @@ st.set_page_config(
     page_title="סוגיה בעיון - AI תורני",
     page_icon="📜",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# הוספת CSS מונע מריחת אותיות ותומך RTL
+# הוספת CSS מונע מריחת אותיות, תומך RTL, ומתאים למבנה החדש בסגנון Gemini
 st.markdown(
     """
     <style>
@@ -32,6 +32,7 @@ st.markdown(
     [data-testid="stMainBlockContainer"], 
     [data-testid="stChatMessage"], 
     [data-testid="stChatInput"], 
+    [data-testid="stPopoverBody"],
     .stMarkdown, p, h1, h2, h3, h4, h5, h6, label, span, div[data-testid="stMarkdownContainer"] {
         direction: rtl !important;
         text-align: right !important;
@@ -57,8 +58,7 @@ st.markdown(
         padding-top: 2rem !important;
     }
 
-    /* 5. תיקון כפתורים ורכיבי בחירה */
-    [data-testid="stSidebar"] button, 
+    /* 5. תיקון כפתורים ורכיבי בחירה - והסתרת שוליים כפתורים בסרגל כדי שיראו כמו תפריט צד */
     [data-testid="stSidebar"] div[role="combobox"] {
         direction: rtl !important;
         text-align: right !important;
@@ -293,93 +293,134 @@ def create_new_chat(project_name):
     st.session_state.projects[project_name].append(new_id)
     st.session_state.current_chat_id = new_id
 
-# 8. סרגל צד (Sidebar) - ניהול פרויקטים ושיחות אחרונות
+# 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini
 with st.sidebar:
-    st.title("⚙️ הגדרות")
     
+    # --- כפתור בולט לשיחה חדשה כמו ב-Gemini ---
+    if st.button("➕ שיחה חדשה", use_container_width=True, type="primary"):
+        create_new_chat(st.session_state.current_project)
+        st.rerun()
+    
+    # --- שורת חיפוש ---
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    search_query = st.text_input("חיפוש", placeholder="🔍 חפש שיחה...", label_visibility="collapsed")
+    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+
+    # --- הוספת תיקייה (פרויקט) חדשה ---
+    col1, col2 = st.columns([8, 2])
+    with col1:
+        st.write("📁 **התיקיות שלי**")
+    with col2:
+        with st.popover("➕", use_container_width=True):
+            new_proj_name = st.text_input("שם התיקייה החדשה:", key="new_proj_input")
+            if st.button("💾 צור תיקייה", use_container_width=True):
+                if new_proj_name and new_proj_name not in st.session_state.projects:
+                    st.session_state.projects[new_proj_name] = []
+                    st.session_state.current_project = new_proj_name
+                    create_new_chat(new_proj_name)
+                    st.rerun()
+
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+    # --- תצוגת רשימת התיקיות (פרויקטים) והשיחות שבתוכן ---
+    for proj_name, chat_ids in st.session_state.projects.items():
+        
+        # סינון שיחות ע"פ החיפוש
+        filtered_chats = [
+            cid for cid in chat_ids 
+            if cid in st.session_state.chats and 
+            (search_query.lower() in st.session_state.chats[cid]["title"].lower() or search_query == "")
+        ]
+        
+        # דילוג על תיקיות שאין בהן תוצאות חיפוש אם התבצע חיפוש
+        if search_query and not filtered_chats:
+            continue
+
+        # קביעה האם התיקייה תהיה פתוחה - רק התיקייה הפעילה פתוחה, או אם מבצעים חיפוש
+        is_expanded = (proj_name == st.session_state.current_project) or bool(search_query)
+        
+        with st.expander(f"📂 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
+            
+            # כפתור ליצירת שיחה ספציפית בתיקייה זו + הגדרות תיקייה
+            c_new, c_del = st.columns([8, 2])
+            with c_new:
+                if st.button("➕ שיחה חדשה כאן", key=f"new_{proj_name}", use_container_width=True):
+                    st.session_state.current_project = proj_name
+                    create_new_chat(proj_name)
+                    st.rerun()
+            with c_del:
+                if len(st.session_state.projects) > 1:
+                    with st.popover("⚙️", use_container_width=True):
+                        st.markdown(f"**מחק תיקייה?**\nכל השיחות ב-{proj_name} יימחקו.")
+                        if st.button("🗑️ אישור", key=f"del_proj_{proj_name}", type="primary"):
+                            for c_id in st.session_state.projects[proj_name]:
+                                if c_id in st.session_state.chats:
+                                    del st.session_state.chats[c_id]
+                            del st.session_state.projects[proj_name]
+                            
+                            # ניתוב מחדש לתיקייה אחרת
+                            st.session_state.current_project = list(st.session_state.projects.keys())[0]
+                            if not st.session_state.projects[st.session_state.current_project]:
+                                create_new_chat(st.session_state.current_project)
+                            else:
+                                st.session_state.current_chat_id = st.session_state.projects[st.session_state.current_project][-1]
+                            st.rerun()
+            
+            st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+            
+            # רשימת השיחות בסגנון בחירה כמו ב-Gemini
+            for cid in reversed(filtered_chats): # מציג שיחות אחרונות למעלה
+                chat = st.session_state.chats[cid]
+                chat_title = chat["title"]
+                
+                is_active = (cid == st.session_state.current_chat_id)
+                btn_type = "primary" if is_active else "secondary"
+                
+                col_btn, col_menu = st.columns([85, 15])
+                
+                with col_btn:
+                    if st.button(f"💬 {chat_title}", key=f"btn_{cid}", use_container_width=True, type=btn_type):
+                        st.session_state.current_chat_id = cid
+                        st.session_state.current_project = proj_name
+                        st.rerun()
+                        
+                with col_menu:
+                    # תפריט שלוש נקודות מותאם
+                    with st.popover("⋮", use_container_width=True):
+                        # שינוי שם
+                        new_name = st.text_input("שם השיחה:", value=chat_title, key=f"rn_in_{cid}")
+                        if st.button("💾 שמור", key=f"rn_btn_{cid}", use_container_width=True):
+                            if new_name:
+                                st.session_state.chats[cid]["title"] = new_name
+                                st.rerun()
+                                
+                        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+                        
+                        # מחיקה
+                        if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True):
+                            st.session_state.projects[proj_name].remove(cid)
+                            del st.session_state.chats[cid]
+                            
+                            # טיפול במצב שבו מחקנו את השיחה הנוכחית
+                            if cid == st.session_state.current_chat_id:
+                                if st.session_state.projects[proj_name]:
+                                    st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
+                                else:
+                                    create_new_chat(proj_name)
+                            st.rerun()
+
+    # --- תפריט תחתון להגדרות אפליקציה (כמו כפתור Settings ב-Gemini) ---
+    st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
     style_mode = st.radio(
-        "בחר סגנון ניתוח:",
+        "⚙️ הגדרות: סגנון תשובה",
         options=["פשוט ומונגש", "ישיבתי-למדני (סגנון שו\"ת)"],
         index=0
     )
 
-    st.markdown("---")
-    
-    # --- ניהול פרויקטים ---
-    st.subheader("📁 ניהול פרויקטים")
-    
-    # בחירת פרויקט פעיל
-    project_list = list(st.session_state.projects.keys())
-    selected_project = st.selectbox("בחר פרויקט:", project_list, index=project_list.index(st.session_state.current_project))
-    if selected_project != st.session_state.current_project:
-        st.session_state.current_project = selected_project
-        st.rerun()
 
-    # יצירת פרויקט חדש
-    with st.expander("➕ הוסף פרויקט חדש"):
-        new_proj_name = st.text_input("שם הפרויקט:")
-        if st.button("צור פרויקט"):
-            if new_proj_name and new_proj_name not in st.session_state.projects:
-                st.session_state.projects[new_proj_name] = []
-                st.session_state.current_project = new_proj_name
-                create_new_chat(new_proj_name)
-                st.success(f"הפרויקט '{new_proj_name}' נוצר בהצלחה!")
-                st.rerun()
-
-    # מחיקת פרויקט קיים
-    if len(st.session_state.projects) > 1:
-        with st.expander("🗑️ מחק פרויקט נוכחי"):
-            st.warning(f"האם למחוק את '{st.session_state.current_project}'?")
-            if st.button("אישור מחיקה"):
-                proj_to_del = st.session_state.current_project
-                # מחיקת השיחות המשוייכות לפרויקט
-                for c_id in st.session_state.projects[proj_to_del]:
-                    if c_id in st.session_state.chats:
-                        del st.session_state.chats[c_id]
-                del st.session_state.projects[proj_to_del]
-                
-                # מעבר לפרויקט הראשון ברשימה
-                st.session_state.current_project = list(st.session_state.projects.keys())[0]
-                if not st.session_state.projects[st.session_state.current_project]:
-                    create_new_chat(st.session_state.current_project)
-                else:
-                    st.session_state.current_chat_id = st.session_state.projects[st.session_state.current_project][-1]
-                st.rerun()
-
-    st.markdown("---")
-
-    # --- שיחה חדשה בפרויקט ---
-    if st.button("➕ שיחה חדשה בפרויקט", use_container_width=True):
-        create_new_chat(st.session_state.current_project)
-        st.rerun()
-
-    st.markdown("---")
-    
-    # --- שיחות אחרונות בפרויקט הנבחר ---
-    st.subheader(f"📜 שיחות אחרונות ב-{st.session_state.current_project}")
-    
-    project_chat_ids = st.session_state.projects.get(st.session_state.current_project, [])
-    active_chats = {
-        c_id: st.session_state.chats[c_id]["title"]
-        for c_id in project_chat_ids
-        if c_id in st.session_state.chats
-    }
-
-    if active_chats:
-        selected_id = st.selectbox(
-            "בחר שיחה מהרשימה:",
-            options=list(active_chats.keys()),
-            format_func=lambda x: active_chats[x],
-            index=list(active_chats.keys()).index(st.session_state.current_chat_id) if st.session_state.current_chat_id in active_chats else 0
-        )
-        
-        if selected_id != st.session_state.current_chat_id:
-            st.session_state.current_chat_id = selected_id
-            st.rerun()
-
-# 9. עיצוב הממשק והצגת השיחה הנוכחית
+# 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
-st.caption(f"פרויקט פעיל: **{st.session_state.current_project}** | מחובר בזמן אמת לספריא")
+st.caption(f"תיקייה פעילה: **{st.session_state.current_project}** | מחובר בזמן אמת לספריא")
 
 current_chat = st.session_state.chats[st.session_state.current_chat_id]
 
