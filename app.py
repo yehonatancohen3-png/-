@@ -1,14 +1,14 @@
 # 1. ייבוא ספריות נדרשות
-import streamlit as st  # ייבוא ספריית Streamlit לבניית ממשק המשתמש
-import os  # ייבוא ספרייה לעבודה עם מערכת הקבצים ונתיבים
-import json  # ייבוא ספרייה לטיפול בקובצי JSON
-import requests  # ייבוא ספרייה לביצוע בקשות HTTP לקריאה מ-APIs
-import re  # ייבוא ספרייה לטיפול בביטויים רגולריים (Regex)
-import time  # ייבוא ספרייה לעבודה עם זמנים והשהיות
-import uuid  # ייבוא ספרייה לייצור מזהים ייחודיים
-from concurrent.futures import ThreadPoolExecutor  # הרצת משימות ברקע
-from dotenv import load_dotenv  # טעינת משתני סביבה
-import google.generativeai as genai  # ה-SDK של Google Gemini
+import streamlit as st
+import os
+import json
+import requests
+import re
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
+import google.generativeai as genai
 
 # 2. הגדרות דף האינטרנט
 st.set_page_config(
@@ -22,13 +22,10 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 1. איפוס מעטפת האפליקציה הראשית כדי לשמור על חישובי Flexbox/Grid של Streamlit */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMain"] {
         direction: ltr !important;
         text-align: left !important;
     }
-
-    /* 2. החלת RTL והצמדה לימין אך ורק על אלמנטים של תוכן וטקסט */
     [data-testid="stMainBlockContainer"], 
     [data-testid="stChatMessage"], 
     [data-testid="stChatInput"], 
@@ -39,33 +36,24 @@ st.markdown(
         word-break: keep-all !important;
         overflow-wrap: break-word !important;
     }
-
-    /* 3. תיקון מריחת בועות הצ'אט והקלט במרכז */
     [data-testid="stChatMessage"] {
         width: 100% !important;
         max-width: 100% !important;
     }
-
-    /* 4. תיקון סרגל הצד (Sidebar) */
     [data-testid="stSidebar"] {
         direction: rtl !important;
         text-align: right !important;
     }
-    
     [data-testid="stSidebarUserContent"] {
         direction: rtl !important;
         text-align: right !important;
         padding-top: 2rem !important;
     }
-
-    /* 5. תיקון כפתורים ורכיבי בחירה */
     [data-testid="stSidebar"] div[role="combobox"] {
         direction: rtl !important;
         text-align: right !important;
         width: 100% !important;
     }
-
-    /* 6. תיקון תצוגת רשימות */
     ul, ol {
         direction: rtl !important;
         text-align: right !important;
@@ -81,7 +69,6 @@ st.markdown(
 load_dotenv()
 
 api_key = None
-
 if "GEMINI_API_KEY" in st.secrets:
     api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
 elif "GOOGLE_API_KEY" in st.secrets:
@@ -245,7 +232,7 @@ def analyze_sugya(messages_history, style_mode):
         }
         
         model = genai.GenerativeModel(
-            model_name='models/gemini-3.6-flash',
+            model_name='models/gemini-2.5-flash',
             system_instruction=system_prompt,
             generation_config=generation_config
         )
@@ -308,7 +295,6 @@ if "data_loaded" not in st.session_state:
         st.session_state.current_project = "פרויקט ראשי"
         st.session_state.current_chat_id = None
     
-    # הבטחה שלפחות שיחה אחת קיימת
     if not st.session_state.current_chat_id or st.session_state.current_chat_id not in st.session_state.chats:
         new_id = str(uuid.uuid4())
         st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": [], "project": "פרויקט ראשי"}
@@ -318,8 +304,9 @@ if "data_loaded" not in st.session_state:
         
     st.session_state.data_loaded = True
 
-if "search_query" not in st.session_state:
-    st.session_state.search_query = ""
+# אתחול משתנה החיפוש ב-Session State
+if "search_input_box" not in st.session_state:
+    st.session_state.search_input_box = ""
 
 def create_new_chat(project_name):
     new_id = str(uuid.uuid4())
@@ -328,33 +315,25 @@ def create_new_chat(project_name):
     st.session_state.current_chat_id = new_id
     save_user_data()
 
-# פונקציית Callback לעדכון ערך החיפוש מידית בלי לגרום לריסטרט מיותר של הווידג'ט
-def update_search():
-    st.session_state.search_query = st.session_state.search_input_box
-
-# 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini עם חיפוש עקבי שלא מתאפס
+# 8. סרגל צד (Sidebar)
 with st.sidebar:
     
-    # --- כפתור בולט לשיחה חדשה כמו ב-Gemini ---
     if st.button("➕ שיחה חדשה", use_container_width=True, type="primary"):
         create_new_chat(st.session_state.current_project)
         st.rerun()
     
-    # --- שורת חיפוש עקבית המקושרת ל-Callback ---
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
+    # שורת החיפוש ללא ארגומנט value כדי להימנע מאיפוס כפוף ב-rerun
     st.text_input(
         "חיפוש", 
-        value=st.session_state.search_query, 
         placeholder="🔍 חפש שיחה...", 
         label_visibility="collapsed",
-        key="search_input_box",
-        on_change=update_search
+        key="search_input_box"
     )
 
     st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
-    # --- הוספת תיקייה (פרויקט) חדשה ---
     col1, col2 = st.columns([8, 2])
     with col1:
         st.write("📁 **התיקיות שלי**")
@@ -370,27 +349,22 @@ with st.sidebar:
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-    # --- תצוגת רשימת התיקיות (פרויקטים) והשיחות שבתוכן ---
     for proj_name, chat_ids in list(st.session_state.projects.items()):
         
-        # סינון שיחות ע"פ החיפוש העדכני מתוך ה-Session State
-        current_search = st.session_state.search_query.lower()
+        current_search = st.session_state.search_input_box.lower()
         filtered_chats = [
             cid for cid in chat_ids 
             if cid in st.session_state.chats and 
             (current_search in st.session_state.chats[cid]["title"].lower() or current_search == "")
         ]
         
-        # דילוג על תיקיות שאין בהן תוצאות חיפוש אם התבצע חיפוש פעיל
         if current_search and not filtered_chats:
             continue
 
-        # קביעה האם התיקייה תהיה פתוחה - אם יש בה שיחות תואמות חיפוש או שהיא התיקייה הפעילה
         is_expanded = (proj_name == st.session_state.current_project) or bool(current_search)
         
         with st.expander(f"📂 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
             
-            # כפתור ליצירת שיחה ספציפית בתיקייה זו + הגדרות תיקייה
             c_new, c_del = st.columns([8, 2])
             with c_new:
                 if st.button("➕ שיחה חדשה כאן", key=f"new_{proj_name}", use_container_width=True):
@@ -407,7 +381,6 @@ with st.sidebar:
                                     del st.session_state.chats[c_id]
                             del st.session_state.projects[proj_name]
                             
-                            # ניתוב מחדש לתיקייה אחרת
                             st.session_state.current_project = list(st.session_state.projects.keys())[0]
                             if not st.session_state.projects[st.session_state.current_project]:
                                 create_new_chat(st.session_state.current_project)
@@ -418,8 +391,7 @@ with st.sidebar:
             
             st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
             
-            # רשימת השיחות בסגנון בחירה כמו ב-Gemini
-            for cid in reversed(filtered_chats): # מציג שיחות אחרונות למעלה
+            for cid in reversed(filtered_chats):
                 chat = st.session_state.chats[cid]
                 chat_title = chat["title"]
                 
@@ -436,9 +408,7 @@ with st.sidebar:
                         st.rerun()
                         
                 with col_menu:
-                    # תפריט שלוש נקודות מותאם
                     with st.popover("⋮", use_container_width=True):
-                        # שינוי שם
                         new_name = st.text_input("שם השיחה:", value=chat_title, key=f"rn_in_{cid}")
                         if st.button("💾 שמור", key=f"rn_btn_{cid}", use_container_width=True):
                             if new_name:
@@ -448,12 +418,10 @@ with st.sidebar:
                                 
                         st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
                         
-                        # מחיקה
                         if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True):
                             st.session_state.projects[proj_name].remove(cid)
                             del st.session_state.chats[cid]
                             
-                            # טיפול במצב שבו מחקנו את השיחה הנוכחית
                             if cid == st.session_state.current_chat_id:
                                 if st.session_state.projects[proj_name]:
                                     st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
@@ -462,14 +430,12 @@ with st.sidebar:
                             save_user_data()
                             st.rerun()
 
-    # --- תפריט תחתון להגדרות אפליקציה ---
     st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
     style_mode = st.radio(
         "⚙️ הגדרות: סגנון תשובה",
         options=["פשוט ומונגש", "ישיבתי-למדני (סגנון שו\"ת)"],
         index=0
     )
-
 
 # 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
@@ -482,7 +448,6 @@ for message in current_chat["messages"]:
         st.markdown(message["content"])
 
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
-    # עדכון כותרת השיחה אם זו ההודעה הראשונה
     if not current_chat["messages"]:
         current_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
         save_user_data()
