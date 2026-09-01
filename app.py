@@ -334,7 +334,7 @@ if current_chat.get("running_future"):
         current_chat["running_future"] = None
         st.rerun()
     else:
-        st.info("⏳ יהונתן מעיין בסוגיה ומריץ חיפוש ברקע... ניתן לעבור לשיחות אחרות בינתיים.")
+        st.info("⏳ יהונתן מעיין בסוגיה, תשובה תינתן בעוד כחצי דקה. ניתן לעבור לשיחות אחרות בינתיים.")
 
 # הצגת כל הודעות השיחה
 for message in current_chat["messages"]:
