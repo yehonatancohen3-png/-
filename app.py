@@ -1,16 +1,14 @@
-# 1. ייבוא ספריות נדרשות
 import streamlit as st
 import os
 import json
 import requests
 import re
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# 2. הגדרות דף האינטרנט
+# 1. הגדרות דף האינטרנט
 st.set_page_config(
     page_title="Gemini - סוגיה בעיון",
     page_icon="✨",
@@ -77,6 +75,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# 2. ניהול Executor גלובלי להרצת משימות ברקע (גם בעת מעבר דפים)
+if "executor" not in st.session_state:
+    st.session_state.executor = ThreadPoolExecutor(max_workers=4)
+
 # 3. טעינת מפתח ה-API
 load_dotenv()
 
@@ -102,8 +104,7 @@ def fetch_from_sefaria(query: str) -> str:
         response = requests.post(url, json=payload, timeout=8)
         
         if response.status_code == 200:
-            data = response.json()
-            hits = data.get("hits", {}).get("hits", [])
+            hits = response.json().get("hits", {}).get("hits", [])
             if not hits:
                 return "לא נמצאו מקורות תואמים בספריא."
             results = []
@@ -120,7 +121,7 @@ def fetch_from_sefaria(query: str) -> str:
         return f"לא ניתן היה לשלוף מקורות מספריא: {str(e)}"
     return "לא נמצאו מקורות ספציפיים בספריא."
 
-# 5. מנגנון שליפה משולב
+# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
 def load_torah_database():
     db_path = os.path.join("data", "torah_database.json")
     if os.path.exists(db_path):
@@ -173,7 +174,8 @@ SYSTEM_PROMPT = """
 6. מסקנה הלכתית למעשה
 """
 
-def analyze_sugya(messages_history):
+def analyze_sugya_worker(messages_history):
+    """פונקציה עצמאית שמורצת בתוך ה-Thread ברקע"""
     try:
         last_prompt = messages_history[-1]["content"]
         retrieved_context = retrieve_all_context(last_prompt)
@@ -195,17 +197,22 @@ def analyze_sugya(messages_history):
         response = chat.send_message(prompt_with_context)
         return response.text
     except Exception as e:
-        st.error(f"שגיאה בהפעלת המודל: {str(e)}")
-        return None
+        return f"שגיאה בהפעלת המודל: {str(e)}"
 
-# 7. ניהול נתונים היררכי ב-Session State (פרויקטים -> שיחות)
+# 7. ניהול נתונים ב-Session State (פרויקטים -> שיחות)
 if "projects" not in st.session_state:
     p_id = str(uuid.uuid4())
     c_id = str(uuid.uuid4())
     st.session_state.projects = {
         p_id: {
             "name": "פרוייקט - מודול AI סוגיה בעיון",
-            "chats": {c_id: {"title": "שיחה חדשה", "messages": []}}
+            "chats": {
+                c_id: {
+                    "title": "שיחה חדשה", 
+                    "messages": [],
+                    "running_future": None # שדה שמחזיק את המשימה שרצה ברקע
+                }
+            }
         }
     }
     st.session_state.current_project_id = p_id
@@ -219,7 +226,13 @@ def create_new_project(name):
     c_id = str(uuid.uuid4())
     st.session_state.projects[p_id] = {
         "name": name if name.strip() else "פרויקט חדש",
-        "chats": {c_id: {"title": "שיחה חדשה", "messages": []}}
+        "chats": {
+            c_id: {
+                "title": "שיחה חדשה", 
+                "messages": [],
+                "running_future": None
+            }
+        }
     }
     st.session_state.current_project_id = p_id
     st.session_state.current_chat_id = c_id
@@ -227,7 +240,11 @@ def create_new_project(name):
 def create_new_chat():
     p_id = st.session_state.current_project_id
     c_id = str(uuid.uuid4())
-    st.session_state.projects[p_id]["chats"][c_id] = {"title": "שיחה חדשה", "messages": []}
+    st.session_state.projects[p_id]["chats"][c_id] = {
+        "title": "שיחה חדשה", 
+        "messages": [],
+        "running_future": None
+    }
     st.session_state.current_chat_id = c_id
 
 # 8. סרגל צד (Sidebar) אינטראקטיבי במבנה Gemini
@@ -248,7 +265,7 @@ with st.sidebar:
 
     st.write("")
 
-    # מקטע 2: תיקיות Notebook / פרויקטים (ניתנים ללחיצה ומעבר!)
+    # מקטע 2: תיקיות Notebook / פרויקטים בלחיצה
     st.caption("תיקיות Notebook")
     
     with st.popover("➕  תיקיית Notebook חדשה", use_container_width=True):
@@ -258,7 +275,6 @@ with st.sidebar:
                 create_new_project(new_proj_name)
                 st.rerun()
 
-    # הצגת הפרויקטים ככפתורים לחיצים
     for p_id, p_data in list(st.session_state.projects.items()):
         is_proj_active = (p_id == st.session_state.current_project_id)
         btn_type = "primary" if is_proj_active else "secondary"
@@ -270,7 +286,7 @@ with st.sidebar:
 
     st.write("")
 
-    # מקטע 3: מהזמן האחרון (שיחות בתוך הפרויקט הנבחר)
+    # מקטע 3: מהזמן האחרון (שיחות בתוך הפרויקט הנבחר כולל אינדיקציות טעינה)
     st.caption("מהזמן האחרון")
 
     current_proj = st.session_state.projects[st.session_state.current_project_id]
@@ -282,11 +298,13 @@ with st.sidebar:
 
     for c_id, c_data in list(filtered_chats.items()):
         is_chat_active = (c_id == st.session_state.current_chat_id)
+        is_running = c_data.get("running_future") is not None and not c_data["running_future"].done()
+        
+        display_title = c_data["title"] + (" ⏳" if is_running else "")
         
         col1, col2 = st.columns([0.85, 0.15])
         with col1:
-            btn_style = "<b>" + c_data["title"] + "</b>" if is_chat_active else c_data["title"]
-            if st.button(c_data["title"], key=f"chat_{c_id}", use_container_width=True):
+            if st.button(display_title, key=f"chat_{c_id}", use_container_width=True):
                 st.session_state.current_chat_id = c_id
                 st.rerun()
         with col2:
@@ -298,7 +316,7 @@ with st.sidebar:
                     st.session_state.current_chat_id = list(current_proj["chats"].keys())[0]
                 st.rerun()
 
-# 9. עיצוב הממשק והצגת השיחה
+# 9. עיצוב הממשק והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
 
 current_proj = st.session_state.projects[st.session_state.current_project_id]
@@ -306,43 +324,32 @@ current_chat = current_proj["chats"][st.session_state.current_chat_id]
 
 st.caption(f"פרויקט: **{current_proj['name']}** | שיחה: **{current_chat['title']}**")
 
+# בדיקת משימות שרצות ברקע בשיחה הנוכחית
+if current_chat.get("running_future"):
+    future = current_chat["running_future"]
+    if future.done():
+        answer = future.result()
+        if answer:
+            current_chat["messages"].append({"role": "assistant", "content": answer})
+        current_chat["running_future"] = None
+        st.rerun()
+    else:
+        st.info("⏳ יהונתן מעיין בסוגיה ומריץ חיפוש ברקע... ניתן לעבור לשיחות אחרות בינתיים.")
+
+# הצגת כל הודעות השיחה
 for message in current_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# קבלת קלט חדש מהמשתמש
 if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
     if not current_chat["messages"] or current_chat["title"] == "שיחה חדשה":
         current_chat["title"] = prompt[:30] + ("..." if len(prompt) > 30 else "")
 
     current_chat["messages"].append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        status_placeholder = st.empty()
-        messages_list = [
-            "יהונתן חושב...",
-            "יהונתן עומד לפתור את הסוגיה...",
-            "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
-            "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
-            "יהונתן צריך ריכוז...",
-            "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה..."
-        ]
-
-        with ThreadPoolExecutor() as executor:
-            future = executor.submit(analyze_sugya, current_chat["messages"])
-            idx = 0
-            while not future.done():
-                current_msg = messages_list[idx % len(messages_list)]
-                status_placeholder.info(f"⏳ {current_msg}")
-                time.sleep(2.5)
-                idx += 1
-            answer = future.result()
-
-        status_placeholder.empty()
-
-        if answer:
-            st.markdown(answer)
-            current_chat["messages"].append({"role": "assistant", "content": answer})
-        else:
-            st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")
+    
+    # שליחת הבקשה ל-Worker ברקע ושמירת ה-Future בתוך השיחה
+    future = st.session_state.executor.submit(analyze_sugya_worker, current_chat["messages"].copy())
+    current_chat["running_future"] = future
+    
+    st.rerun()
