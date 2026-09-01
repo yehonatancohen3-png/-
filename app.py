@@ -58,7 +58,7 @@ st.markdown(
         padding-top: 2rem !important;
     }
 
-    /* 5. תיקון כפתורים ורכיבי בחירה - והסתרת שוליים כפתורים בסרגל כדי שיראו כמו תפריט צד */
+    /* 5. תיקון כפתורים ורכיבי בחירה */
     [data-testid="stSidebar"] div[role="combobox"] {
         direction: rtl !important;
         text-align: right !important;
@@ -325,7 +325,7 @@ def create_new_chat(project_name):
     st.session_state.current_chat_id = new_id
     save_user_data()
 
-# 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini
+# 8. סרגל צד (Sidebar) - ניהול שיחות בסגנון Google Gemini עם חיפוש עקבי
 with st.sidebar:
     
     # --- כפתור בולט לשיחה חדשה כמו ב-Gemini ---
@@ -333,9 +333,24 @@ with st.sidebar:
         create_new_chat(st.session_state.current_project)
         st.rerun()
     
-    # --- שורת חיפוש ---
+    # --- שורת חיפוש עקבית ---
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-    search_query = st.text_input("חיפוש", placeholder="🔍 חפש שיחה...", label_visibility="collapsed")
+    
+    if "search_query" not in st.session_state:
+        st.session_state.search_query = ""
+
+    search_query = st.text_input(
+        "חיפוש", 
+        value=st.session_state.search_query, 
+        placeholder="🔍 חפש שיחה...", 
+        label_visibility="collapsed",
+        key="search_input_box"
+    )
+    
+    if search_query != st.session_state.search_query:
+        st.session_state.search_query = search_query
+        st.rerun()
+
     st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
     # --- הוספת תיקייה (פרויקט) חדשה ---
