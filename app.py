@@ -17,7 +17,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# הוספת CSS מקיף ליישור מלא מימין לשמאל (RTL) ועיצוב סרגל הצד תואם Gemini
+# CSS ליישור RTL ועיצוב כפתורי הפרויקטים והשיחות בסגנון Gemini
 st.markdown(
     """
     <style>
@@ -49,7 +49,7 @@ st.markdown(
         text-align: right !important;
     }
 
-    /* עיצוב כפתורי סרגל הצד כטקסט נקי ברקע שקוף */
+    /* עיצוב כפתורי סרגל הצד */
     [data-testid="stSidebar"] button {
         border: none !important;
         background: transparent !important;
@@ -65,17 +65,12 @@ st.markdown(
         border-radius: 20px !important;
     }
 
-    /* עיצוב כרטיסיית הפרויקט המודגשת בדיוק כפי שמופיע ב-Gemini */
-    .project-card {
-        background-color: #f0f4f9;
-        border-radius: 20px;
-        padding: 10px 14px;
-        margin: 6px 0;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #1f1f1f;
+    /* הדגשת פרויקט פעיל */
+    div[data-testid="stSidebar"] button[kind="primary"] {
+        background-color: #e8f0fe !important;
+        color: #1a73e8 !important;
+        font-weight: bold !important;
+        border-radius: 20px !important;
     }
     </style>
     """,
@@ -86,7 +81,6 @@ st.markdown(
 load_dotenv()
 
 api_key = None
-
 if "GEMINI_API_KEY" in st.secrets:
     api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
 elif "GOOGLE_API_KEY" in st.secrets:
@@ -95,7 +89,7 @@ else:
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets ב-Streamlit Cloud.")
+    st.error("לא נמצא מפתח API! אנא הגדר GEMINI_API_KEY ב-Secrets.")
     st.stop()
 
 genai.configure(api_key=api_key)
@@ -104,40 +98,29 @@ genai.configure(api_key=api_key)
 def fetch_from_sefaria(query: str) -> str:
     try:
         url = "https://www.sefaria.org/api/v2/search/text"
-        payload = {
-            "query": query,
-            "type": "text",
-            "field": "exact",
-            "size": 5
-        }
+        payload = {"query": query, "type": "text", "field": "exact", "size": 5}
         response = requests.post(url, json=payload, timeout=8)
         
         if response.status_code == 200:
             data = response.json()
             hits = data.get("hits", {}).get("hits", [])
-            
             if not hits:
                 return "לא נמצאו מקורות תואמים בספריא."
-            
             results = []
             for hit in hits:
                 source = hit.get("_source", {})
                 title = source.get("ref", "")
                 he_text = source.get("he", "")
-                
                 if isinstance(he_text, str) and he_text.strip():
                     clean_text = re.sub(r'<[^>]+>', '', he_text)
                     results.append(f"מקור מתוך ספריא [{title}]:\n\"{clean_text}\"")
-            
             if results:
                 return "\n\n".join(results)
-                
     except Exception as e:
         return f"לא ניתן היה לשלוף מקורות מספריא: {str(e)}"
-    
     return "לא נמצאו מקורות ספציפיים בספריא."
 
-# 5. מנגנון שליפה משולב (מאגר מקומי + ספריא)
+# 5. מנגנון שליפה משולב
 def load_torah_database():
     db_path = os.path.join("data", "torah_database.json")
     if os.path.exists(db_path):
@@ -150,82 +133,44 @@ def load_torah_database():
 
 def retrieve_all_context(query: str) -> str:
     context_parts = []
-    
-    # 1. שליפה מספריא
     sefaria_data = fetch_from_sefaria(query)
     if "לא נמצאו" not in sefaria_data and "לא ניתן" not in sefaria_data:
         context_parts.append(f"--- מקורות מדויקים מספריא (כולל ניקוד) ---\n{sefaria_data}")
         
-    # 2. שליפה מהמאגר המקומי
     database = load_torah_database()
     query_words = [w for w in query.split() if len(w) > 2]
     matched_local = []
-    
     for item in database:
         content = item.get("content", "")
         book = item.get("book", "")
         if any(word in content or word in book for word in query_words):
             source_info = f"מקור מקומי: {book} "
-            
-            masechet = item.get("masechet")
-            daf = item.get("daf")
-            siman = item.get("siman")
-            seif = item.get("seif")
-            
-            if masechet:
-                source_info += f"מסכת {masechet} "
-            if daf:
-                source_info += f"דף {daf} "
-            if siman:
-                source_info += f"סימן {siman} "
-            if seif:
-                source_info += f"סעיף {seif} "
-                
+            if item.get("masechet"): source_info += f"מסכת {item['masechet']} דף {item['daf']} "
+            if item.get("siman"): source_info += f"סימן {item['siman']} סעיף {item['seif']} "
             source_info += f"\nתוכן המקור: \"{content}\""
             matched_local.append(source_info)
             
     if matched_local:
         context_parts.append(f"--- מקורות מהמאגר המקומי ---\n" + "\n\n".join(matched_local))
-        
-    if context_parts:
-        return "\n\n".join(context_parts)
-    return "לא נמצאו מקורות במאגרי המידע הזמינים."
+    return "\n\n".join(context_parts) if context_parts else "לא נמצאו מקורות במאגרי המידע הזמינים."
 
-# 6. System Prompt מוקשח
+# 6. System Prompt
 SYSTEM_PROMPT = """
 אתה מודול AI תורני מומחה, המנתח סוגיות הלכתיות, מחשבתיות ואקטואליות במתודולוגיה של בית מדרש ("סוגיה בעיון").
 תפקידך להציג ניתוח יסודי, מעמיק ומדויק מפי המקורות ועד לפסיקת ההלכה למעשה.
 
-כללי ברזל לציטוט ומקורות (חובה מוחלטת):
-1. כאשר אתה מביא ציטוט מתוך המקורות שנשלפו מספריא או מהמאגר המקומי, חובה עליך להביא אותו מילה במילה בדיוק מוחלט כפי שהוא מופיע במקור!
-2. שמור על הניקוד המקורי כפי שנשלף מספריא. אל תוריד ניקוד, אל תשנה אותיות ואל תסדר מחדש את משפטי המקור.
-3. תחום כל ציטוט מדויק בתוך מירכאות ("...").
-4. ציין תמיד בצמוד לכל ציטוט את מראה המקום המדויק שלו בספריא.
-5. אסור להמציא מקורות, ציטוטים, ניקוד או שמות ספרים שלא קיימים!
+כללי ברזל לציטוט ומקורות:
+1. ציטוטים מספריא/מאגר מקומי יש להביא מילה במילה במירכאות ("...").
+2. שמור על הניקוד המקורי כפי שנשלף מספריא.
+3. ציין תמיד בצמוד לכל ציטוט את מראה המקום המדויק.
 
-חובה עליך לבנות את התשובה לפי הסדר הלמדני הבא:
-
-1. **הגדרת המקרה והשאלה:**
-   - פירוק השאלה למרכיבים ההלכתיים שלה.
-
-2. **יסוד הסוגיה במקורות (תנ"ך, משנה, גמרא):**
-   - הובאת המקורות המרכזיים בציטוט מילה במילה (כולל ניקוד אם קיים במקור) עם מראה מקום מדויק והסבר הסוגיה.
-
-3. **שיטות הראשונים (מחלוקות הסוגיה):**
-   - הצגת השיטות השונות (רש"י, תוספות, רמב"ם, רמב"ן, רא"ש וכו') והסברת הסברה הלמדנית.
-
-4. **פסיקת השולחן ערוך והנושאי כלים:**
-   - הצגת פסק המחבר והרמ"א, ודברי נושאי הכלים המרכזיים.
-
-5. **שו"תים ופוסקי זמננו (אקטואליה והיקש הלכתי):**
-   - דיון בפסיקות מאוחרות והשלכות למעשה.
-
-6. **מסקנה הלכתית למעשה:**
-   - סיכום ברור של השורה התחתונה לפי מנהג ספרד ואשכנז.
-   - הדגשה: "תוכן זה מיועד לעיון ולמידה, ובמקרה מעשי יש להתייעץ עם רב מורה הוראה."
-
-כללי שפה ודיוק:
-- ענה בעברית תקנית, רהוטה ותורנית בלבד.
+סדר התשובה:
+1. הגדרת המקרה והשאלה
+2. יסוד הסוגיה במקורות
+3. שיטות הראשונים
+4. פסיקת השולחן ערוך והנושאי כלים
+5. שו"תים ופוסקי זמננו
+6. מסקנה הלכתית למעשה
 """
 
 def analyze_sugya(messages_history):
@@ -233,11 +178,7 @@ def analyze_sugya(messages_history):
         last_prompt = messages_history[-1]["content"]
         retrieved_context = retrieve_all_context(last_prompt)
         
-        generation_config = {
-            "temperature": 0.0,
-            "top_p": 0.8,
-        }
-        
+        generation_config = {"temperature": 0.0, "top_p": 0.8}
         model = genai.GenerativeModel(
             model_name='models/gemini-3.6-flash',
             system_instruction=SYSTEM_PROMPT,
@@ -250,42 +191,46 @@ def analyze_sugya(messages_history):
             formatted_history.append({"role": role, "parts": [msg["content"]]})
 
         chat = model.start_chat(history=formatted_history)
-
-        prompt_with_context = f"""
-מקורות מדויקים שנשלפו מספריא ומאגר הנתונים:
-{retrieved_context}
-
-שאלה לניתוח: {last_prompt}
-"""
-
+        prompt_with_context = f"מקורות שנשלפו:\n{retrieved_context}\n\nשאלה לניתוח: {last_prompt}"
         response = chat.send_message(prompt_with_context)
         return response.text
-
     except Exception as e:
         st.error(f"שגיאה בהפעלת המודל: {str(e)}")
         return None
 
-# 7. אתחול נתונים ב-session_state
-if "notebooks" not in st.session_state:
-    st.session_state.notebooks = ["פרוייקט - מודול AI סוגיה בעיון"]
-
-if "chats" not in st.session_state:
-    st.session_state.chats = {}
-
-if "current_chat_id" not in st.session_state:
-    new_id = str(uuid.uuid4())
-    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
-    st.session_state.current_chat_id = new_id
+# 7. ניהול נתונים היררכי ב-Session State (פרויקטים -> שיחות)
+if "projects" not in st.session_state:
+    p_id = str(uuid.uuid4())
+    c_id = str(uuid.uuid4())
+    st.session_state.projects = {
+        p_id: {
+            "name": "פרוייקט - מודול AI סוגיה בעיון",
+            "chats": {c_id: {"title": "שיחה חדשה", "messages": []}}
+        }
+    }
+    st.session_state.current_project_id = p_id
+    st.session_state.current_chat_id = c_id
 
 if "search_term" not in st.session_state:
     st.session_state.search_term = ""
 
-def create_new_chat():
-    new_id = str(uuid.uuid4())
-    st.session_state.chats[new_id] = {"title": "שיחה חדשה", "messages": []}
-    st.session_state.current_chat_id = new_id
+def create_new_project(name):
+    p_id = str(uuid.uuid4())
+    c_id = str(uuid.uuid4())
+    st.session_state.projects[p_id] = {
+        "name": name if name.strip() else "פרויקט חדש",
+        "chats": {c_id: {"title": "שיחה חדשה", "messages": []}}
+    }
+    st.session_state.current_project_id = p_id
+    st.session_state.current_chat_id = c_id
 
-# 8. סרגל צד (Sidebar) מעוצב במבנה של Gemini
+def create_new_chat():
+    p_id = st.session_state.current_project_id
+    c_id = str(uuid.uuid4())
+    st.session_state.projects[p_id]["chats"][c_id] = {"title": "שיחה חדשה", "messages": []}
+    st.session_state.current_chat_id = c_id
+
+# 8. סרגל צד (Sidebar) אינטראקטיבי במבנה Gemini
 with st.sidebar:
     st.markdown("## ✨ Gemini")
     st.write("")
@@ -303,54 +248,64 @@ with st.sidebar:
 
     st.write("")
 
-    # מקטע 2: תיקיות Notebook / פרויקטים
+    # מקטע 2: תיקיות Notebook / פרויקטים (ניתנים ללחיצה ומעבר!)
     st.caption("תיקיות Notebook")
     
     with st.popover("➕  תיקיית Notebook חדשה", use_container_width=True):
-        new_folder = st.text_input("שם התיקייה:")
-        if st.button("צור תיקייה"):
-            if new_folder and new_folder not in st.session_state.notebooks:
-                st.session_state.notebooks.append(new_folder)
+        new_proj_name = st.text_input("שם התיקייה / הפרויקט:")
+        if st.button("צור פרויקט"):
+            if new_proj_name:
+                create_new_project(new_proj_name)
                 st.rerun()
 
-    for nb in st.session_state.notebooks:
-        st.markdown(f'<div class="project-card">📙 {nb}</div>', unsafe_allow_html=True)
+    # הצגת הפרויקטים ככפתורים לחיצים
+    for p_id, p_data in list(st.session_state.projects.items()):
+        is_proj_active = (p_id == st.session_state.current_project_id)
+        btn_type = "primary" if is_proj_active else "secondary"
+        
+        if st.button(f"📙  {p_data['name']}", key=f"proj_{p_id}", type=btn_type, use_container_width=True):
+            st.session_state.current_project_id = p_id
+            st.session_state.current_chat_id = list(p_data["chats"].keys())[0]
+            st.rerun()
 
     st.write("")
 
-    # מקטע 3: מהזמן האחרון (היסטוריית שיחות)
+    # מקטע 3: מהזמן האחרון (שיחות בתוך הפרויקט הנבחר)
     st.caption("מהזמן האחרון")
 
+    current_proj = st.session_state.projects[st.session_state.current_project_id]
+    
     filtered_chats = {
-        c_id: c_data for c_id, c_data in st.session_state.chats.items()
+        c_id: c_data for c_id, c_data in current_proj["chats"].items()
         if st.session_state.search_term.lower() in c_data["title"].lower()
     }
 
     for c_id, c_data in list(filtered_chats.items()):
-        is_active = (c_id == st.session_state.current_chat_id)
-        btn_label = c_data["title"]
+        is_chat_active = (c_id == st.session_state.current_chat_id)
         
         col1, col2 = st.columns([0.85, 0.15])
         with col1:
-            if st.button(btn_label, key=f"chat_{c_id}", use_container_width=True):
+            btn_style = "<b>" + c_data["title"] + "</b>" if is_chat_active else c_data["title"]
+            if st.button(c_data["title"], key=f"chat_{c_id}", use_container_width=True):
                 st.session_state.current_chat_id = c_id
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"del_{c_id}"):
-                del st.session_state.chats[c_id]
-                if not st.session_state.chats:
+                del current_proj["chats"][c_id]
+                if not current_proj["chats"]:
                     create_new_chat()
                 else:
-                    st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
+                    st.session_state.current_chat_id = list(current_proj["chats"].keys())[0]
                 st.rerun()
 
-# 9. עיצוב הממשק והצגת השיחה הנוכחית
+# 9. עיצוב הממשק והצגת השיחה
 st.title("📜 סוגיה בעיון")
-st.caption("מנוע בינה מלאכותית לניתוח סוגיות הלכתיות ולמדניות (מחובר בזמן אמת לספריא)")
 
-current_chat = st.session_state.chats[st.session_state.current_chat_id]
+current_proj = st.session_state.projects[st.session_state.current_project_id]
+current_chat = current_proj["chats"][st.session_state.current_chat_id]
 
-# הצגת כל הודעות הצ'אט של השיחה הנוכחית
+st.caption(f"פרויקט: **{current_proj['name']}** | שיחה: **{current_chat['title']}**")
+
 for message in current_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -365,27 +320,23 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
 
     with st.chat_message("assistant"):
         status_placeholder = st.empty()
-
         messages_list = [
             "יהונתן חושב...",
             "יהונתן עומד לפתור את הסוגיה...",
             "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
             "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
             "יהונתן צריך ריכוז...",
-            "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
-            "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
+            "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה..."
         ]
 
         with ThreadPoolExecutor() as executor:
             future = executor.submit(analyze_sugya, current_chat["messages"])
-            
             idx = 0
             while not future.done():
                 current_msg = messages_list[idx % len(messages_list)]
                 status_placeholder.info(f"⏳ {current_msg}")
                 time.sleep(2.5)
                 idx += 1
-            
             answer = future.result()
 
         status_placeholder.empty()
