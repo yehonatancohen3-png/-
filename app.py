@@ -325,7 +325,7 @@ def create_new_chat(project_name):
 if "style_mode" not in st.session_state:
     st.session_state.style_mode = "פשוט ומונגש"
 
-# 8. סרגל צד (Sidebar) - מעוצב, מונגש ומתוקן
+# 8. סרגל צד (Sidebar) - מעוצב, מונגש ומתוקן למניעת מחיקות כפולות
 with st.sidebar:
     # --- מיתוג וכותרת ---
     st.markdown("<h2 style='text-align: center; color: #1f77b4; margin-bottom: 0;'>📜 סוגיה בעיון</h2>", unsafe_allow_html=True)
@@ -434,7 +434,7 @@ with st.sidebar:
             
             st.markdown("<hr style='margin: 5px 0; border: none; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
             
-            # רשימת השיחות בתיקייה
+            # רשימת השיחות בתיקייה עם כפתור מחיקה חיצוני נקי
             for cid in reversed(filtered_chats):
                 chat = st.session_state.chats[cid]
                 chat_title = chat["title"]
@@ -442,7 +442,7 @@ with st.sidebar:
                 is_active = (cid == st.session_state.current_chat_id)
                 btn_type = "primary" if is_active else "secondary"
                 
-                col_btn, col_menu = st.columns([85, 15])
+                col_btn, col_del_chat = st.columns([82, 18])
                 
                 with col_btn:
                     if st.button(f"💬 {chat_title}", key=f"btn_{cid}", use_container_width=True, type=btn_type):
@@ -454,35 +454,24 @@ with st.sidebar:
                         else:
                             st.experimental_rerun()
                         
-                with col_menu:
-                    with st.popover("⋮", use_container_width=True):
-                        new_name = st.text_input("שנה שם שיחה:", value=chat_title, key=f"rn_in_{cid}")
-                        if st.button("💾 שמור", key=f"rn_btn_{cid}", use_container_width=True, type="primary"):
-                            if new_name:
-                                st.session_state.chats[cid]["title"] = new_name
-                                save_user_data()
-                                if hasattr(st, "rerun"):
-                                    st.rerun()
-                                else:
-                                    st.experimental_rerun()
-                                
-                        if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True, type="primary"):
-                            if cid in st.session_state.projects[proj_name]:
-                                st.session_state.projects[proj_name].remove(cid)
-                            if cid in st.session_state.chats:
-                                del st.session_state.chats[cid]
-                            
-                            if cid == st.session_state.current_chat_id:
-                                if st.session_state.projects[proj_name]:
-                                    st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
-                                else:
-                                    create_new_chat(proj_name)
-                            
-                            save_user_data()
-                            if hasattr(st, "rerun"):
-                                st.rerun()
+                with col_del_chat:
+                    if st.button("🗑️", key=f"del_btn_{cid}", use_container_width=True, help="מחק שיחה זו"):
+                        if cid in st.session_state.projects[proj_name]:
+                            st.session_state.projects[proj_name].remove(cid)
+                        if cid in st.session_state.chats:
+                            del st.session_state.chats[cid]
+                        
+                        if cid == st.session_state.current_chat_id:
+                            if st.session_state.projects[proj_name]:
+                                st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
                             else:
-                                st.experimental_rerun()
+                                create_new_chat(proj_name)
+                        
+                        save_user_data()
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
 
 # 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
