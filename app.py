@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# הוספת CSS מונע מריחת אותיות, תומך RTL, ומתאים למבנה החדש בסגנון Gemini
+# הוספת CSS מונע מריחת אותיות, תומך RTL, ומגדיל את נראות כפתורי המחיקה
 st.markdown(
     """
     <style>
@@ -58,6 +58,10 @@ st.markdown(
         text-align: right !important;
         padding-right: 1.5rem !important;
         padding-left: 0rem !important;
+    }
+    /* התאמת גודל ומרכוז עבור כפתורי האשפה בסרגל הצד */
+    [data-testid="stSidebar"] button[kind="secondary"] p {
+        font-size: 16px !important;
     }
     </style>
     """,
@@ -325,7 +329,7 @@ def create_new_chat(project_name):
 if "style_mode" not in st.session_state:
     st.session_state.style_mode = "פשוט ומונגש"
 
-# 8. סרגל צד (Sidebar) - מעוצב, מונגש ומתוקן למניעת מחיקות כפולות
+# 8. סרגל צד (Sidebar) - מעוצב, מונגש וכולל אישור כפול למניעת מחיקות שגויות
 with st.sidebar:
     # --- מיתוג וכותרת ---
     st.markdown("<h2 style='text-align: center; color: #1f77b4; margin-bottom: 0;'>📜 סוגיה בעיון</h2>", unsafe_allow_html=True)
@@ -342,7 +346,7 @@ with st.sidebar:
     
     st.divider()
 
-    # --- פעולות מרכזיות (שיחה חדשה מתוקנת) ---
+    # --- פעולות מרכזיות (שיחה חדשה) ---
     if st.button("➕ שיחה חדשה", use_container_width=True, type="primary", key="global_new_chat_btn"):
         if not st.session_state.current_project or st.session_state.current_project not in st.session_state.projects:
             st.session_state.current_project = list(st.session_state.projects.keys())[0]
@@ -399,7 +403,7 @@ with st.sidebar:
         
         with st.expander(f"📁 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
             
-            # כפתורי ניהול תיקייה פנימיים (כולל מחיקת תיקייה)
+            # כפתורי ניהול תיקייה פנימיים (כולל בטיחות למחיקת תיקייה באמצעות פופאפ)
             c_new, c_del = st.columns([7, 3])
             with c_new:
                 if st.button("➕ שיחה", key=f"new_{proj_name}", use_container_width=True):
@@ -411,8 +415,8 @@ with st.sidebar:
                         st.experimental_rerun()
             with c_del:
                 with st.popover("🗑️ מחיקה", use_container_width=True):
-                    st.markdown(f"**למחוק את '{proj_name}'?**\nכל השיחות בתיקייה יימחקו.")
-                    if st.button("אישור מחיקה", key=f"del_proj_{proj_name}", type="primary", use_container_width=True):
+                    st.markdown(f"**למחוק את '{proj_name}'?**\nכל השיחות בתיקייה יימחקו לצמיתות.")
+                    if st.button("אישור מחיקה סופית", key=f"del_proj_{proj_name}", type="primary", use_container_width=True):
                         for c_id in st.session_state.projects[proj_name]:
                             if c_id in st.session_state.chats:
                                 del st.session_state.chats[c_id]
@@ -434,7 +438,7 @@ with st.sidebar:
             
             st.markdown("<hr style='margin: 5px 0; border: none; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
             
-            # רשימת השיחות בתיקייה עם כפתור מחיקה חיצוני נקי
+            # רשימת השיחות בתיקייה עם מנגנון אישור כפול (בטיחות) למחיקת שיחה
             for cid in reversed(filtered_chats):
                 chat = st.session_state.chats[cid]
                 chat_title = chat["title"]
@@ -455,23 +459,26 @@ with st.sidebar:
                             st.experimental_rerun()
                         
                 with col_del_chat:
-                    if st.button("🗑️", key=f"del_btn_{cid}", use_container_width=True, help="מחק שיחה זו"):
-                        if cid in st.session_state.projects[proj_name]:
-                            st.session_state.projects[proj_name].remove(cid)
-                        if cid in st.session_state.chats:
-                            del st.session_state.chats[cid]
-                        
-                        if cid == st.session_state.current_chat_id:
-                            if st.session_state.projects[proj_name]:
-                                st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
+                    # מנגנון בטיחות: שימוש ב-Popover שדורש לחיצה נוספת ולא מוחק מיד בלחיצה אחת
+                    with st.popover("🗑️", help="מחק שיחה זו"):
+                        st.markdown(f"**למחוק את השיחה?**\n'{chat_title}'")
+                        if st.button("כן, מחק", key=f"confirm_del_{cid}", type="primary", use_container_width=True):
+                            if cid in st.session_state.projects[proj_name]:
+                                st.session_state.projects[proj_name].remove(cid)
+                            if cid in st.session_state.chats:
+                                del st.session_state.chats[cid]
+                            
+                            if cid == st.session_state.current_chat_id:
+                                if st.session_state.projects[proj_name]:
+                                    st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
+                                else:
+                                    create_new_chat(proj_name)
+                            
+                            save_user_data()
+                            if hasattr(st, "rerun"):
+                                st.rerun()
                             else:
-                                create_new_chat(proj_name)
-                        
-                        save_user_data()
-                        if hasattr(st, "rerun"):
-                            st.rerun()
-                        else:
-                            st.experimental_rerun()
+                                st.experimental_rerun()
 
 # 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
