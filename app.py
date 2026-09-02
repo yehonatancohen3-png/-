@@ -326,36 +326,50 @@ def create_new_chat(project_name):
     st.session_state.current_chat_id = new_id
     save_user_data()
 
-# 8. סרגל צד (Sidebar)
+# אתחול משתנה הסגנון
+if "style_mode" not in st.session_state:
+    st.session_state.style_mode = "פשוט ומונגש"
+
+# 8. סרגל צד (Sidebar) - מעוצב ומונגש
 with st.sidebar:
+    # --- מיתוג וכותרת ---
+    st.markdown("<h2 style='text-align: center; color: #1f77b4; margin-bottom: 0;'>📜 סוגיה בעיון</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 14px; color: gray; margin-top: 0;'>העוזר התורני החכם שלך</p>", unsafe_allow_html=True)
     
+    # --- הגדרות סגנון התשובה (בראש העמוד) ---
+    st.markdown("### ⚙️ סגנון לימוד")
+    st.session_state.style_mode = st.selectbox(
+        "בחר את סגנון התשובה המועדף:",
+        options=["פשוט ומונגש", "ישיבתי-למדני (סגנון שו\"ת)", "הכנה למבחני רבנות"],
+        index=["פשוט ומונגש", "ישיבתי-למדני (סגנון שו\"ת)", "הכנה למבחני רבנות"].index(st.session_state.style_mode),
+        label_visibility="collapsed"
+    )
+    
+    st.divider()
+
+    # --- פעולות מרכזיות (שיחה חדשה) ---
     if st.button("➕ שיחה חדשה", use_container_width=True, type="primary"):
         create_new_chat(st.session_state.current_project)
         st.rerun()
+
+    # --- חיפוש מהיר (בזמן אמת) ---
+    st.session_state.search_input_box = st.text_input(
+        "חיפוש",
+        value=st.session_state.get("search_input_box", ""),
+        placeholder="🔍 חפש שיחה בתיקיות...",
+        label_visibility="collapsed"
+    )
     
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    st.divider()
 
-    with st.form(key="search_form", clear_on_submit=False):
-        search_query_input = st.text_input(
-            "חיפוש", 
-            value=st.session_state.get("search_input_box", ""),
-            placeholder="🔍 חפש שיחה...", 
-            label_visibility="collapsed"
-        )
-        submitted = st.form_submit_button("חפש")
-        
-        if submitted or search_query_input != st.session_state.get("search_input_box", ""):
-            st.session_state.search_input_box = search_query_input
-
-    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-
-    col1, col2 = st.columns([8, 2])
-    with col1:
-        st.write("📁 **התיקיות שלי**")
-    with col2:
-        with st.popover("➕", use_container_width=True):
+    # --- ניהול תיקיות ---
+    col_title, col_add_folder = st.columns([7, 3], gap="small")
+    with col_title:
+        st.markdown("<h4 style='margin-bottom: 0; padding-top: 5px;'>📂 התיקיות שלי</h4>", unsafe_allow_html=True)
+    with col_add_folder:
+        with st.popover("➕ חדש", use_container_width=True):
             new_proj_name = st.text_input("שם התיקייה החדשה:", key="new_proj_input")
-            if st.button("💾 צור תיקייה", use_container_width=True):
+            if st.button("💾 צור", use_container_width=True, type="primary"):
                 if new_proj_name and new_proj_name not in st.session_state.projects:
                     st.session_state.projects[new_proj_name] = []
                     st.session_state.current_project = new_proj_name
@@ -364,6 +378,7 @@ with st.sidebar:
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
+    # --- הצגת התיקיות והשיחות ---
     for proj_name, chat_ids in list(st.session_state.projects.items()):
         
         current_search = st.session_state.search_input_box.lower()
@@ -378,19 +393,20 @@ with st.sidebar:
 
         is_expanded = (proj_name == st.session_state.current_project) or bool(current_search)
         
-        with st.expander(f"📂 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
+        with st.expander(f"📁 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
             
+            # כפתורי ניהול תיקייה פנימיים
             c_new, c_del = st.columns([8, 2])
             with c_new:
-                if st.button("➕ שיחה חדשה כאן", key=f"new_{proj_name}", use_container_width=True):
+                if st.button("➕ שיחה חדשה", key=f"new_{proj_name}", use_container_width=True):
                     st.session_state.current_project = proj_name
                     create_new_chat(proj_name)
                     st.rerun()
             with c_del:
                 if len(st.session_state.projects) > 1:
                     with st.popover("⚙️", use_container_width=True):
-                        st.markdown(f"**מחק תיקייה?**\nכל השיחות ב-{proj_name} יימחקו.")
-                        if st.button("🗑️ אישור", key=f"del_proj_{proj_name}", type="primary"):
+                        st.markdown(f"**מחק את '{proj_name}'?**\nכל השיחות בתיקייה יימחקו.")
+                        if st.button("🗑️ מחק", key=f"del_proj_{proj_name}", type="primary", use_container_width=True):
                             for c_id in st.session_state.projects[proj_name]:
                                 if c_id in st.session_state.chats:
                                     del st.session_state.chats[c_id]
@@ -404,8 +420,9 @@ with st.sidebar:
                             save_user_data()
                             st.rerun()
             
-            st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 5px 0; border: none; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
             
+            # רשימת השיחות בתיקייה
             for cid in reversed(filtered_chats):
                 chat = st.session_state.chats[cid]
                 chat_title = chat["title"]
@@ -424,15 +441,13 @@ with st.sidebar:
                         
                 with col_menu:
                     with st.popover("⋮", use_container_width=True):
-                        new_name = st.text_input("שם השיחה:", value=chat_title, key=f"rn_in_{cid}")
-                        if st.button("💾 שמור", key=f"rn_btn_{cid}", use_container_width=True):
+                        new_name = st.text_input("שנה שם שיחה:", value=chat_title, key=f"rn_in_{cid}")
+                        if st.button("💾 שמור", key=f"rn_btn_{cid}", use_container_width=True, type="primary"):
                             if new_name:
                                 st.session_state.chats[cid]["title"] = new_name
                                 save_user_data()
                                 st.rerun()
                                 
-                        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
-                        
                         if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True):
                             st.session_state.projects[proj_name].remove(cid)
                             del st.session_state.chats[cid]
@@ -444,13 +459,6 @@ with st.sidebar:
                                     create_new_chat(proj_name)
                             save_user_data()
                             st.rerun()
-
-    st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
-    style_mode = st.radio(
-        "⚙️ הגדרות: סגנון תשובה",
-        options=["פשוט ומונגש", "ישיבתי-למדני (סגנון שו\"ת)", "הכנה למבחני רבנות"],
-        index=0
-    )
 
 # 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
@@ -475,7 +483,7 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
 
     with st.chat_message("assistant"):
         with st.spinner("⏳ יהונתן חושב ומנתח את הסוגיה..."):
-            answer = analyze_sugya(current_chat["messages"], style_mode)
+            answer = analyze_sugya(current_chat["messages"], st.session_state.style_mode)
 
         if answer:
             st.markdown(answer)
