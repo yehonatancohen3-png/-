@@ -226,7 +226,6 @@ def analyze_sugya(messages_history, style_mode):
             "top_p": 0.8,
         }
         
-        # שימוש במודל יציב ומעודכן
         model = genai.GenerativeModel(
             model_name='gemini-1.5-flash',
             system_instruction=system_prompt,
@@ -251,7 +250,10 @@ def analyze_sugya(messages_history, style_mode):
         return response.text
 
     except Exception as e:
-        st.error(f"שגיאה בהפעלת המודל: {str(e)}")
+        import traceback
+        error_details = traceback.format_exc()
+        st.error(f"שגיאה מפורטת בהפעלת המודל: {str(e)}")
+        st.text(error_details)
         return None
 
 # 7. מערכת שמירת נתונים מקומית (Persistence)
