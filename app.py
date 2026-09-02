@@ -81,7 +81,7 @@ if not api_key:
 
 genai.configure(api_key=api_key)
 
-# 4. מנגנון שליפת מקורות מ-Sefaria API
+# 4. מנגנון שליפת מקורות מ-Sefaria API (הקטנת כמות למהירות מרבית)
 def fetch_from_sefaria(query: str) -> str:
     try:
         url = "https://www.sefaria.org/api/v2/search/text"
@@ -89,9 +89,9 @@ def fetch_from_sefaria(query: str) -> str:
             "query": query,
             "type": "text",
             "field": "exact",
-            "size": 5
+            "size": 3
         }
-        response = requests.post(url, json=payload, timeout=8)
+        response = requests.post(url, json=payload, timeout=5)
         
         if response.status_code == 200:
             data = response.json()
@@ -214,47 +214,60 @@ def get_system_prompt(style_mode: str) -> str:
 """
 
 def analyze_sugya(messages_history, style_mode):
-    try:
-        last_prompt = messages_history[-1]["content"]
-        retrieved_context = retrieve_all_context(last_prompt)
-        
-        system_prompt = get_system_prompt(style_mode)
-        
-        generation_config = {
-            "temperature": 0.0,
-            "top_p": 0.8,
-        }
-        
-        # שימוש במודל העדכני 
-        model = genai.GenerativeModel(
-            model_name='gemini-3.6-flash',
-            system_instruction=system_prompt,
-            generation_config=generation_config
-        )
+    max_retries = 3
+    retry_delay = 5
 
-        formatted_history = []
-        for msg in messages_history[:-1]:
-            role = "user" if msg["role"] == "user" else "model"
-            formatted_history.append({"role": role, "parts": [msg["content"]]})
+    for attempt in range(max_retries):
+        try:
+            last_prompt = messages_history[-1]["content"]
+            retrieved_context = retrieve_all_context(last_prompt)
+            
+            system_prompt = get_system_prompt(style_mode)
+            
+            # הגדרת פרמטרים מותאמים למהירות מקסימלית ודיוק
+            generation_config = {
+                "temperature": 0.0,
+                "top_p": 0.8,
+            }
+            
+            model = genai.GenerativeModel(
+                model_name='gemini-3.6-flash',
+                system_instruction=system_prompt,
+                generation_config=generation_config
+            )
 
-        chat = model.start_chat(history=formatted_history)
+            # מגבלת היסטוריה ל-6 הודעות אחרונות לחיסכון בזמן ובעומס זיכרון
+            recent_history = messages_history[-7:-1]
+            formatted_history = []
+            for msg in recent_history:
+                role = "user" if msg["role"] == "user" else "model"
+                formatted_history.append({"role": role, "parts": [msg["content"]]})
 
-        prompt_with_context = f"""
+            chat = model.start_chat(history=formatted_history)
+
+            prompt_with_context = f"""
 מקורות מדויקים שנשלפו מספריא ומאגר הנתונים:
 {retrieved_context}
 
 שאלה לניתוח: {last_prompt}
 """
 
-        response = chat.send_message(prompt_with_context)
-        return response.text
+            response = chat.send_message(prompt_with_context)
+            return response.text
 
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        st.error(f"שגיאה מפורטת בהפעלת המודל: {str(e)}")
-        st.code(error_details)
-        return None
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "ResourceExhausted" in err_str:
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # המתנה אקספוננציאלית
+                    continue
+            import traceback
+            error_details = traceback.format_exc()
+            st.error(f"שגיאה מפורטת בהפעלת המודל: {err_str}")
+            st.code(error_details)
+            return None
+    return "חרגת ממכסת הבקשות (Rate Limit). אנא המתן מספר שניות ונסה שוב."
 
 # 7. מערכת שמירת נתונים מקומית (Persistence)
 USER_DATA_FILE = os.path.join("data", "user_data.json")
