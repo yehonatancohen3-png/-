@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# הוספת CSS מונע מריחת אותיות, תומך RTL, ומגדיל את נראות כפתורי המחיקה
+# הוספת CSS מונע מריחת אותיות, תומך RTL, מגדיל את נראות כפתורי המחיקה ומתאים את סרגל הצד למובייל
 st.markdown(
     """
     <style>
@@ -62,6 +62,18 @@ st.markdown(
     /* התאמת גודל ומרכוז עבור כפתורי האשפה בסרגל הצד */
     [data-testid="stSidebar"] button[kind="secondary"] p {
         font-size: 16px !important;
+    }
+    
+    /* התאמת סרגל הצד למסכי טלפון נייד (רזולוציה נורמלית ומניעת חסימות) */
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"] {
+            width: 100% !important;
+            min-width: 100% !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            align-items: center !important;
+        }
     }
     </style>
     """,
