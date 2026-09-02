@@ -331,6 +331,7 @@ if "style_mode" not in st.session_state:
     st.session_state.style_mode = "פשוט ומונגש"
 
 # 8. סרגל צד (Sidebar) - מעוצב ומונגש
+# 8. סרגל צד (Sidebar) - מעוצב, מונגש ומתוקן
 with st.sidebar:
     # --- מיתוג וכותרת ---
     st.markdown("<h2 style='text-align: center; color: #1f77b4; margin-bottom: 0;'>📜 סוגיה בעיון</h2>", unsafe_allow_html=True)
@@ -347,8 +348,11 @@ with st.sidebar:
     
     st.divider()
 
-    # --- פעולות מרכזיות (שיחה חדשה) ---
-    if st.button("➕ שיחה חדשה", use_container_width=True, type="primary"):
+    # --- פעולות מרכזיות (שיחה חדשה מתוקנת) ---
+    if st.button("➕ שיחה חדשה", use_container_width=True, type="primary", key="global_new_chat_btn"):
+        # לוודא שהפרויקט הנוכחי קיים, ואם לא - לבחור ברירת מחדל
+        if not st.session_state.current_project or st.session_state.current_project not in st.session_state.projects:
+            st.session_state.current_project = list(st.session_state.projects.keys())[0]
         create_new_chat(st.session_state.current_project)
         st.rerun()
 
@@ -369,7 +373,7 @@ with st.sidebar:
     with col_add_folder:
         with st.popover("➕ חדש", use_container_width=True):
             new_proj_name = st.text_input("שם התיקייה החדשה:", key="new_proj_input")
-            if st.button("💾 צור", use_container_width=True, type="primary"):
+            if st.button("💾 צור", use_container_width=True, type="primary", key="create_proj_btn"):
                 if new_proj_name and new_proj_name not in st.session_state.projects:
                     st.session_state.projects[new_proj_name] = []
                     st.session_state.current_project = new_proj_name
@@ -461,7 +465,6 @@ with st.sidebar:
                                     create_new_chat(proj_name)
                             save_user_data()
                             st.rerun()
-
 # 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
 st.caption(f"תיקייה פעילה: **{st.session_state.current_project}** | מחובר בזמן אמת לספריא")
