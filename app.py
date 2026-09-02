@@ -6,7 +6,6 @@ import requests
 import re
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -252,9 +251,8 @@ def analyze_sugya(messages_history, style_mode):
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        # מציג את השגיאה המדויקת על המסך במקום הודעה כללית
         st.error(f"שגיאה מפורטת בהפעלת המודל: {str(e)}")
-        st.text(error_details)
+        st.code(error_details)
         return None
 
 # 7. מערכת שמירת נתונים מקומית (Persistence)
@@ -462,31 +460,8 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        status_placeholder = st.empty()
-
-        messages_list = [
-            "יהונתן חושב...",
-            "יהונתן עומד לפתור את הסוגיה...",
-            "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
-            "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
-            "יהונתן צריך ריכוז...",
-            "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
-            "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
-        ]
-
-        with ThreadPoolExecutor() as executor:
-            future = executor.submit(analyze_sugya, current_chat["messages"], style_mode)
-            
-            idx = 0
-            while not future.done():
-                current_msg = messages_list[idx % len(messages_list)]
-                status_placeholder.info(f"⏳ {current_msg}")
-                time.sleep(2.5)
-                idx += 1
-            
-            answer = future.result()
-
-        status_placeholder.empty()
+        with st.spinner("⏳ יהונתן חושב ומנתח את הסוגיה..."):
+            answer = analyze_sugya(current_chat["messages"], style_mode)
 
         if answer:
             st.markdown(answer)
