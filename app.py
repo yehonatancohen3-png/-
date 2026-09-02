@@ -252,6 +252,7 @@ def analyze_sugya(messages_history, style_mode):
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
+        # מציג את השגיאה המדויקת על המסך במקום הודעה כללית
         st.error(f"שגיאה מפורטת בהפעלת המודל: {str(e)}")
         st.text(error_details)
         return None
@@ -491,5 +492,3 @@ if prompt := st.chat_input("הכנס שאלה או סוגיה בעיון..."):
             st.markdown(answer)
             current_chat["messages"].append({"role": "assistant", "content": answer})
             save_user_data()
-        else:
-            st.error("התרחשה שגיאה בעת ניתוח הסוגיה.")
