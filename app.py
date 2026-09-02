@@ -395,30 +395,32 @@ with st.sidebar:
         
         with st.expander(f"📁 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
             
-            # כפתורי ניהול תיקייה פנימיים
-            c_new, c_del = st.columns([8, 2])
+            # כפתורי ניהול תיקייה פנימיים (כולל כפתור מחיקת תיקייה 🗑️)
+            c_new, c_del = st.columns([7, 3])
             with c_new:
-                if st.button("➕ שיחה חדשה", key=f"new_{proj_name}", use_container_width=True):
+                if st.button("➕ שיחה", key=f"new_{proj_name}", use_container_width=True):
                     st.session_state.current_project = proj_name
                     create_new_chat(proj_name)
                     st.rerun()
             with c_del:
-                if len(st.session_state.projects) > 1:
-                    with st.popover("⚙️", use_container_width=True):
-                        st.markdown(f"**מחק את '{proj_name}'?**\nכל השיחות בתיקייה יימחקו.")
-                        if st.button("🗑️ מחק", key=f"del_proj_{proj_name}", type="primary", use_container_width=True):
-                            for c_id in st.session_state.projects[proj_name]:
-                                if c_id in st.session_state.chats:
-                                    del st.session_state.chats[c_id]
-                            del st.session_state.projects[proj_name]
-                            
-                            st.session_state.current_project = list(st.session_state.projects.keys())[0]
-                            if not st.session_state.projects[st.session_state.current_project]:
-                                create_new_chat(st.session_state.current_project)
-                            else:
-                                st.session_state.current_chat_id = st.session_state.projects[st.session_state.current_project][-1]
-                            save_user_data()
-                            st.rerun()
+                with st.popover("🗑️ מחיקה", use_container_width=True):
+                    st.markdown(f"**למחוק את '{proj_name}'?**\nכל השיחות בתיקייה יימחקו.")
+                    if st.button("אישור מחיקה", key=f"del_proj_{proj_name}", type="primary", use_container_width=True):
+                        for c_id in st.session_state.projects[proj_name]:
+                            if c_id in st.session_state.chats:
+                                del st.session_state.chats[c_id]
+                        del st.session_state.projects[proj_name]
+                        
+                        if not st.session_state.projects:
+                            st.session_state.projects["פרויקט ראשי"] = []
+                        
+                        st.session_state.current_project = list(st.session_state.projects.keys())[0]
+                        if not st.session_state.projects[st.session_state.current_project]:
+                            create_new_chat(st.session_state.current_project)
+                        else:
+                            st.session_state.current_chat_id = st.session_state.projects[st.session_state.current_project][-1]
+                        save_user_data()
+                        st.rerun()
             
             st.markdown("<hr style='margin: 5px 0; border: none; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
             
