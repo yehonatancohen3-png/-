@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# הוספת CSS מונע מריחת אותיות, תומך RTL, מגדיל את נראות כפתורי המחיקה ומתאים את סרגל הצד למובייל
+# הוספת CSS מונע מריחת אותיות, תומך RTL, מדייק את עיצוב כפתורי המחיקה גם במובייל ומונע שבירת שורות בשורה נפרדת
 st.markdown(
     """
     <style>
@@ -64,7 +64,7 @@ st.markdown(
         font-size: 16px !important;
     }
     
-    /* התאמת סרגל הצד למסכי טלפון נייד (רזולוציה נורמלית ומניעת חסימות) */
+    /* מניעת שבירת עמודות בטלפון נייד עבור השורה של השיחה והפח, ושמירה על פריסה אופקית */
     @media (max-width: 768px) {
         [data-testid="stSidebar"] {
             width: 100% !important;
@@ -73,6 +73,15 @@ st.markdown(
         [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] {
             flex-direction: row !important;
             align-items: center !important;
+            flex-wrap: nowrap !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+            width: auto !important;
+            flex: 1 1 auto !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:last-child {
+            flex: 0 0 45px !important;
+            min-width: 45px !important;
         }
     }
     </style>
@@ -458,7 +467,7 @@ with st.sidebar:
                 is_active = (cid == st.session_state.current_chat_id)
                 btn_type = "primary" if is_active else "secondary"
                 
-                col_btn, col_del_chat = st.columns([82, 18])
+                col_btn, col_del_chat = st.columns([82, 18], gap="small")
                 
                 with col_btn:
                     if st.button(f"💬 {chat_title}", key=f"btn_{cid}", use_container_width=True, type=btn_type):
