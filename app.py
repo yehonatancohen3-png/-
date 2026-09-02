@@ -225,9 +225,9 @@ def analyze_sugya(messages_history, style_mode):
             "top_p": 0.8,
         }
         
-        # שימוש במודל 'gemini-1.5-flash' המקורי והיציב
+        # שימוש במודל מעודכן ותומך
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name='gemini-2.5-flash',
             system_instruction=system_prompt,
             generation_config=generation_config
         )
