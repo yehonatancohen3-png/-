@@ -466,15 +466,18 @@ with st.sidebar:
                                 else:
                                     st.experimental_rerun()
                                 
-                        if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True):
-                            st.session_state.projects[proj_name].remove(cid)
-                            del st.session_state.chats[cid]
+                        if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True, type="primary"):
+                            if cid in st.session_state.projects[proj_name]:
+                                st.session_state.projects[proj_name].remove(cid)
+                            if cid in st.session_state.chats:
+                                del st.session_state.chats[cid]
                             
                             if cid == st.session_state.current_chat_id:
                                 if st.session_state.projects[proj_name]:
                                     st.session_state.current_chat_id = st.session_state.projects[proj_name][-1]
                                 else:
                                     create_new_chat(proj_name)
+                            
                             save_user_data()
                             if hasattr(st, "rerun"):
                                 st.rerun()
