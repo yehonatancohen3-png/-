@@ -188,7 +188,7 @@ def get_system_prompt(style_mode: str) -> str:
 תפקידך להציג את השלשלת ההלכתית המלאה והמדויקת לפי הסדר הבא:
 1. **מקורות מהתנ"ך ומדברי הש"ס (גמרא):** הבאת הפסוקים הרלוונטיים וסוגיית הגמרא עם ציטוטים מדויקים ומראי מקומות.
 2. **שיטות הראשונים:** התמקדות מרכזית ברמב"ם, בתוספת שיטות הרא"ש והרי"ף ככל שהם קיימים על הסוגיה.
-3. **שיטות האחרונים:** הצגת הדברים בטור, בבית יוסף על הטור, בשולחן ערוך, וכן בנושאי הכלים המרכזיים (כגון חלקת מחוקק, בית שמואל, פתחי תשובה וכדומה).
+3. **שיטות האחרונים:** הצגת הדברים בטור, בבית יوسف על הטור, בשולחן ערוך, וכן בנושאי הכלים המרכזיים (כגון חלקת מחוקק, בית שמואל, פתחי תשובה וכדומה).
 4. **פסיקה למעשה למנהגי בני ימינו:** סיכום ההלכה למעשה תוך הבחנה ברורה ומפורטת בין מנהגי אשכנז, ספרד ותימן.
 
 {base_rules}
@@ -224,7 +224,6 @@ def analyze_sugya(messages_history, style_mode):
             
             system_prompt = get_system_prompt(style_mode)
             
-            # הגדרת פרמטרים מותאמים למהירות מקסימלית ודיוק
             generation_config = {
                 "temperature": 0.0,
                 "top_p": 0.8,
@@ -236,7 +235,6 @@ def analyze_sugya(messages_history, style_mode):
                 generation_config=generation_config
             )
 
-            # מגבלת היסטוריה ל-6 הודעות אחרונות לחיסכון בזמן ובעומס זיכרון
             recent_history = messages_history[-7:-1]
             formatted_history = []
             for msg in recent_history:
@@ -260,7 +258,7 @@ def analyze_sugya(messages_history, style_mode):
             if "429" in err_str or "ResourceExhausted" in err_str:
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # המתנה אקספוננציאלית
+                    retry_delay *= 2
                     continue
             import traceback
             error_details = traceback.format_exc()
@@ -292,7 +290,6 @@ def save_user_data():
     with open(USER_DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# אתחול Session State מטעינת הקובץ
 if "data_loaded" not in st.session_state:
     saved_data = load_user_data()
     if saved_data:
@@ -315,7 +312,6 @@ if "data_loaded" not in st.session_state:
         
     st.session_state.data_loaded = True
 
-# אתחול משתנה החיפוש ב-Session State
 if "search_input_box" not in st.session_state:
     st.session_state.search_input_box = ""
 
@@ -326,11 +322,9 @@ def create_new_chat(project_name):
     st.session_state.current_chat_id = new_id
     save_user_data()
 
-# אתחול משתנה הסגנון
 if "style_mode" not in st.session_state:
     st.session_state.style_mode = "פשוט ומונגש"
 
-# 8. סרגל צד (Sidebar) - מעוצב ומונגש
 # 8. סרגל צד (Sidebar) - מעוצב, מונגש ומתוקן
 with st.sidebar:
     # --- מיתוג וכותרת ---
@@ -350,11 +344,14 @@ with st.sidebar:
 
     # --- פעולות מרכזיות (שיחה חדשה מתוקנת) ---
     if st.button("➕ שיחה חדשה", use_container_width=True, type="primary", key="global_new_chat_btn"):
-        # לוודא שהפרויקט הנוכחי קיים, ואם לא - לבחור ברירת מחדל
         if not st.session_state.current_project or st.session_state.current_project not in st.session_state.projects:
             st.session_state.current_project = list(st.session_state.projects.keys())[0]
         create_new_chat(st.session_state.current_project)
-        st.rerun()
+        
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
 
     # --- חיפוש מהיר (בזמן אמת) ---
     st.session_state.search_input_box = st.text_input(
@@ -378,7 +375,10 @@ with st.sidebar:
                     st.session_state.projects[new_proj_name] = []
                     st.session_state.current_project = new_proj_name
                     create_new_chat(new_proj_name)
-                    st.rerun()
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
@@ -399,13 +399,16 @@ with st.sidebar:
         
         with st.expander(f"📁 {proj_name} ({len(filtered_chats)})", expanded=is_expanded):
             
-            # כפתורי ניהול תיקייה פנימיים (כולל כפתור מחיקת תיקייה 🗑️)
+            # כפתורי ניהול תיקייה פנימיים (כולל מחיקת תיקייה)
             c_new, c_del = st.columns([7, 3])
             with c_new:
                 if st.button("➕ שיחה", key=f"new_{proj_name}", use_container_width=True):
                     st.session_state.current_project = proj_name
                     create_new_chat(proj_name)
-                    st.rerun()
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
             with c_del:
                 with st.popover("🗑️ מחיקה", use_container_width=True):
                     st.markdown(f"**למחוק את '{proj_name}'?**\nכל השיחות בתיקייה יימחקו.")
@@ -424,7 +427,10 @@ with st.sidebar:
                         else:
                             st.session_state.current_chat_id = st.session_state.projects[st.session_state.current_project][-1]
                         save_user_data()
-                        st.rerun()
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
             
             st.markdown("<hr style='margin: 5px 0; border: none; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
             
@@ -443,7 +449,10 @@ with st.sidebar:
                         st.session_state.current_chat_id = cid
                         st.session_state.current_project = proj_name
                         save_user_data()
-                        st.rerun()
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
                         
                 with col_menu:
                     with st.popover("⋮", use_container_width=True):
@@ -452,7 +461,10 @@ with st.sidebar:
                             if new_name:
                                 st.session_state.chats[cid]["title"] = new_name
                                 save_user_data()
-                                st.rerun()
+                                if hasattr(st, "rerun"):
+                                    st.rerun()
+                                else:
+                                    st.experimental_rerun()
                                 
                         if st.button("🗑️ מחיקה", key=f"del_btn_{cid}", use_container_width=True):
                             st.session_state.projects[proj_name].remove(cid)
@@ -464,7 +476,11 @@ with st.sidebar:
                                 else:
                                     create_new_chat(proj_name)
                             save_user_data()
-                            st.rerun()
+                            if hasattr(st, "rerun"):
+                                st.rerun()
+                            else:
+                                st.experimental_rerun()
+
 # 9. עיצוב הממשק המרכזי והצגת השיחה הנוכחית
 st.title("📜 סוגיה בעיון")
 st.caption(f"תיקייה פעילה: **{st.session_state.current_project}** | מחובר בזמן אמת לספריא")
