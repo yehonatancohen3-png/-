@@ -13,6 +13,7 @@ import time
 import uuid
 import google.generativeai as genai
 from collections import Counter
+from dotenv import load_dotenv
 
 # ==========================================
 # 1. הגדרות בסיסיות (Page Config)
@@ -127,18 +128,23 @@ st.markdown("""
 # ==========================================
 # 3. טעינת משתני סביבה והגדרות API
 # ==========================================
-# מנסה למשוך מפתח מסודות הענן של סטרימליט
+# מנסה לטעון משתנים מקומיים אם קיימים (לשימוש במחשב)
+load_dotenv(override=True)
+
+# מנסה למשוך מפתח מסודות הענן של סטרימליט קודם, ואז מקומית
+api_key = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_API_KEY"]
-    else:
-        api_key = None
 except Exception:
-    api_key = None
+    pass
 
-# אם לא נמצא מפתח בענן, נבקש במסך
 if not api_key:
-    st.info("💡 לא נמצא מפתח API בהגדרות הענן. הכנס את המפתח שלך כאן כדי להתחיל:")
+    api_key = os.getenv("GEMINI_API_KEY")
+
+# אם לא נמצא מפתח בשום מקום, נבקש במסך
+if not api_key:
+    st.info("💡 לא נמצא מפתח API בהגדרות הענן או בקובץ מקומי. הכנס את המפתח שלך כאן כדי להתחיל:")
     api_key = st.text_input("🔑 מפתח API של גוגל:", type="password")
     if not api_key:
         st.stop()
@@ -153,9 +159,9 @@ generation_config = {
   "response_mime_type": "text/plain",
 }
 
-# שימוש במודל היציב והנתמך ביותר לגרסאות השונות (gemini-pro)
+# שימוש במודל החדיש והמתקדם (דורש את הגרסה החדשה של הספרייה שהגדרנו)
 model = genai.GenerativeModel(
-  model_name="gemini-pro",
+  model_name="gemini-1.5-flash",
   generation_config=generation_config,
 )
 
@@ -185,8 +191,11 @@ def init_user_data():
             return {"projects": {"כללי": []}, "chats": {}}
 
 def save_user_data(data):
-    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception:
+        pass # מניעת קריסה במקרה של בעיות כתיבה בענן
 
 if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
@@ -197,11 +206,11 @@ def load_local_database():
         try:
             with open(DB_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # תיקון השגיאה: מוודאים שקובץ הנתונים הוא אכן מילון ולא רשימה/ריק
+                # וידוא שקובץ הנתונים הוא אכן מילון ולא רשימה/ריק
                 if isinstance(data, dict):
                     return data
                 return {}
-        except Exception as e:
+        except Exception:
             return {}
     return {}
 
@@ -210,7 +219,7 @@ local_db = load_local_database()
 @st.cache_data
 def build_fast_word_index(db):
     index = {}
-    # תיקון השגיאה: בניית האינדקס רק אם המאגר הוא בפורמט התקין
+    # בניית האינדקס רק אם המאגר הוא בפורמט התקין
     if isinstance(db, dict):
         for title, text in db.items():
             if isinstance(text, str):
