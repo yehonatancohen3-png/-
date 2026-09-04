@@ -126,7 +126,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. טעינת משתני סביבה וזיהוי מודל אוטומטי!
+# 3. טעינת משתני סביבה והגדרות API
 # ==========================================
 load_dotenv(override=True)
 
@@ -149,29 +149,6 @@ if not api_key:
 # קונפיגורציה של מודל ג'מיני
 genai.configure(api_key=api_key)
 
-# משיכת רשימת המודלים הזמינים מהשרת של גוגל ישירות!
-try:
-    available_models = [
-        m.name.replace("models/", "") 
-        for m in genai.list_models() 
-        if 'generateContent' in m.supported_generation_methods
-    ]
-except Exception as e:
-    st.error(f"שגיאת תקשורת מול גוגל: {e}")
-    st.stop()
-
-if not available_models:
-    st.error("לא נמצאו מודלים נתמכים עבור מפתח זה. בדוק את הגדרות ה-API שלך בגוגל.")
-    st.stop()
-
-# בחירה חכמה של המודל הטוב ביותר שזמין ברשימה שקיבלנו
-preferred_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-pro"]
-selected_model_name = available_models[0] # ברירת המחדל הראשונה שגוגל מספקת
-for pref in preferred_models:
-    if pref in available_models:
-        selected_model_name = pref
-        break
-
 generation_config = {
   "temperature": 0.4,
   "top_p": 0.95,
@@ -180,9 +157,9 @@ generation_config = {
   "response_mime_type": "text/plain",
 }
 
-# שימוש במודל שזוהה בוודאות כפעיל!
+# כאן החזרנו את המודל ל-3.6-flash בדיוק כפי שהשגיאה דרשה!
 model = genai.GenerativeModel(
-  model_name=selected_model_name,
+  model_name="gemini-3.6-flash",
   generation_config=generation_config,
 )
 
@@ -507,11 +484,6 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
                     context = search_sefaria(prompt)
                 elif search_mode == "RAG (מאגר מקומי)":
                     context = rag_local_search(prompt, local_db, local_index)
-                
-                # אנחנו משתמשים במודל שזוהה בוודאות כזמין, ואפילו נציין איזה נבחר!
-                if current_chat.get("is_first_msg", True):
-                    st.caption(f"(פועל באמצעות המודל הזמין ביותר שלך: {selected_model_name})")
-                    current_chat["is_first_msg"] = False
 
                 response_text = get_gemini_response(prompt, context, selected_style)
                 st.markdown(response_text)
