@@ -478,7 +478,7 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             st.markdown(prompt)
             
         with st.chat_message("assistant"):
-            with st.spinner("מעיין בספרים ומנסח תשובה..."):
+            with st.spinner("יהונתן חושב..."):
                 context = ""
                 if search_mode == "Sefaria (אונליין)":
                     context = search_sefaria(prompt)
