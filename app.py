@@ -22,9 +22,10 @@
      * "projects": מילון של שמות פרויקטים ורשימת UUIDs של שיחות בכל פרויקט.
      * "chats": מילון של שיחות לפי UUID (כותרת, היסטוריית הודעות, פרויקט משויך).
    - תוקנה שגיאת KeyError: גישה לפרויקטים נעשית תמיד באופן מוגן מתוך `user_data["projects"]` 
-     עם בדיקת קיומו של המפתח לפני ביצוע `.append()`.
+     עם בדיקת קיומו של המפתח לפני ביצוע `.append()` או `.insert()`.
 
 3. מנוע בינה מלאכותית ומקורות (API):
+   - טעינת מפתח ה-API תומכת גם בקובץ `.env` מקומי וגם ב-`st.secrets` של Streamlit Cloud.
    - שימוש ב-Google Generative AI (מודל `gemini-3.6-flash`).
    - שילוב Sefaria API: שליפה בזמן אמת של מקורות עבריים לפי שאילתת המשתמש.
    - גיבוי מאגר מקומי: טעינת `data/torah_database.json` במידה שספריא אינה זמינה.
@@ -123,13 +124,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. טעינת משתני סביבה וג'מיני
+# 3. טעינת משתני סביבה וג'מיני (מקומי + ענן)
 # ==========================================
 load_dotenv()
+
+# ניסיון שליפה מ-env מקומי
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+# אם לא קיים ב-env, ניסיון שליפה מ-st.secrets ב-Streamlit Cloud
 if not GOOGLE_API_KEY:
-    st.error("⚠️ לא נמצא מפתח API של Google. ודא שקובץ .env מכיל את GOOGLE_API_KEY.")
+    try:
+        if "GOOGLE_API_KEY" in st.secrets:
+            GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+    except Exception:
+        pass
+
+if not GOOGLE_API_KEY:
+    st.error("⚠️ לא נמצא מפתח API של Google. ודא שהגדרת את GOOGLE_API_KEY ב-Secrets ב-Streamlit Cloud או בקובץ .env מקומי.")
     st.stop()
 
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -177,8 +188,11 @@ def init_user_data():
             return {"projects": {"כללי": []}, "chats": {}}
 
 def save_user_data(data):
-    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception:
+        pass
 
 if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
@@ -339,12 +353,11 @@ with st.sidebar:
 
     st.divider()
     
-    # יצירת שיחה חדשה (מתוקן בטיחותית למניעת KeyError)
+    # יצירת שיחה חדשה
     if st.button("💬 שיחה חדשה", use_container_width=True):
         new_chat_id = str(uuid.uuid4())
         active_proj = st.session_state.current_project
         
-        # וידוא שהפרויקט קיים במילון לפני הוספת השיחה
         if active_proj not in st.session_state.user_data["projects"]:
             st.session_state.user_data["projects"][active_proj] = []
             
@@ -406,7 +419,6 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
     
     st.header(current_chat.get("title", "שיחה ללא שם"))
     
-    # הגדרות סגנון ומקורות
     col1, col2 = st.columns([1, 1])
     with col1:
         learning_style = st.selectbox(
@@ -418,36 +430,29 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
 
     st.divider()
 
-    # הצגת היסטוריית הודעות
     for msg in current_chat["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # תיבת קלט
     user_input = st.chat_input("שאל שאלה בסוגיה...")
     if user_input:
-        # עדכון כותרת השיחה אם זו הודעה ראשונה
         if len(current_chat["messages"]) == 0:
             current_chat["title"] = user_input[:30] + "..." if len(user_input) > 30 else user_input
         
-        # שמירת הודעת משתמש
         current_chat["messages"].append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # שליפת מקורות
         context_sources = ""
         if use_sefaria:
             with st.spinner("שולף מקורות מספריא..."):
                 context_sources = search_sefaria(user_input)
 
-        # יצירת תשובה בג'מיני
         with st.chat_message("assistant"):
             with st.spinner("מעיין בסוגיה ומנסח תשובה..."):
                 response_text = get_gemini_response(user_input, context_sources, learning_style)
                 st.markdown(response_text)
 
-        # שמירת תשובת עוזר
         current_chat["messages"].append({"role": "assistant", "content": response_text})
         save_user_data(st.session_state.user_data)
         st.rerun()
