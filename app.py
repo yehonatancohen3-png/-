@@ -153,7 +153,7 @@ generation_config = {
   "response_mime_type": "text/plain",
 }
 
-# תיקון השגיאה: שימוש במודל היציב והנתמך ביותר לגרסאות השונות (gemini-pro)
+# שימוש במודל היציב והנתמך ביותר לגרסאות השונות (gemini-pro)
 model = genai.GenerativeModel(
   model_name="gemini-pro",
   generation_config=generation_config,
@@ -196,7 +196,11 @@ def load_local_database():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                # תיקון השגיאה: מוודאים שקובץ הנתונים הוא אכן מילון ולא רשימה/ריק
+                if isinstance(data, dict):
+                    return data
+                return {}
         except Exception as e:
             return {}
     return {}
@@ -206,19 +210,22 @@ local_db = load_local_database()
 @st.cache_data
 def build_fast_word_index(db):
     index = {}
-    for title, text in db.items():
-        words = re.findall(r'\b\w+\b', text)
-        for w in set(words):
-            if w not in index:
-                index[w] = []
-            index[w].append(title)
+    # תיקון השגיאה: בניית האינדקס רק אם המאגר הוא בפורמט התקין
+    if isinstance(db, dict):
+        for title, text in db.items():
+            if isinstance(text, str):
+                words = re.findall(r'\b\w+\b', text)
+                for w in set(words):
+                    if w not in index:
+                        index[w] = []
+                    index[w].append(title)
     return index
 
 local_index = build_fast_word_index(local_db)
 
 def rag_local_search(query, db, index, limit=3):
-    if not db:
-        return "לא נמצא מאגר מקומי."
+    if not db or not isinstance(db, dict):
+        return "לא נמצא מאגר מקומי תקין."
     query_words = re.findall(r'\b\w+\b', query)
     scores = Counter()
     for word in query_words:
@@ -230,7 +237,8 @@ def rag_local_search(query, db, index, limit=3):
     top_results = scores.most_common(limit)
     results_text = ""
     for title, score in top_results:
-        snippet = db[title][:500] + "..."
+        text_content = str(db[title])
+        snippet = text_content[:500] + "..."
         results_text += f"\nמקור מקומי: {title}\nתוכן (חלק): {snippet}\n"
     return results_text
 
