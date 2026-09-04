@@ -48,7 +48,7 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     
-    /* פלקסבוקס לשורת השיחה: כפתור שיחה בצד ימין, כפתור מחיקה בצד שמאל */
+    /* פלקסבוקס לשורת השיחה */
     .chat-row-container {
         display: flex;
         flex-direction: row;
@@ -59,7 +59,7 @@ st.markdown("""
         flex-wrap: nowrap;
     }
     
-    /* קונטיינר לכפתור בחירת השיחה (תופס את רוב המקום) */
+    /* קונטיינר לכפתור בחירת השיחה */
     .chat-btn-container {
         flex-grow: 1;
         min-width: 0; 
@@ -82,15 +82,15 @@ st.markdown("""
         border-color: #c4c4c4;
     }
     
-    /* קונטיינר לכפתור המחיקה (Popover) - מיושר לשמאל */
+    /* קונטיינר לכפתור המחיקה (Popover) */
     .chat-del-container {
         flex-shrink: 0;
-        margin-right: 5px; /* מרווח מכפתור השיחה */
+        margin-right: 5px; 
         display: flex;
         align-items: center;
     }
     
-    /* עיצוב כפתור המחיקה עצמו - מינימליסטי וקומפקטי */
+    /* עיצוב כפתור המחיקה עצמו */
     .chat-del-container [data-testid="stPopover"] > div > button {
         background-color: transparent;
         border: none;
@@ -126,12 +126,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. טעינת משתני סביבה והגדרות API
+# 3. טעינת משתני סביבה וזיהוי מודל אוטומטי!
 # ==========================================
-# מנסה לטעון משתנים מקומיים אם קיימים (לשימוש במחשב)
 load_dotenv(override=True)
 
-# מנסה למשוך מפתח מסודות הענן של סטרימליט קודם, ואז מקומית
 api_key = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
@@ -142,15 +140,38 @@ except Exception:
 if not api_key:
     api_key = os.getenv("GEMINI_API_KEY")
 
-# אם לא נמצא מפתח בשום מקום, נבקש במסך
 if not api_key:
-    st.info("💡 לא נמצא מפתח API בהגדרות הענן או בקובץ מקומי. הכנס את המפתח שלך כאן כדי להתחיל:")
+    st.info("💡 לא נמצא מפתח API. הכנס את המפתח שלך כאן כדי להתחיל:")
     api_key = st.text_input("🔑 מפתח API של גוגל:", type="password")
     if not api_key:
         st.stop()
 
 # קונפיגורציה של מודל ג'מיני
 genai.configure(api_key=api_key)
+
+# משיכת רשימת המודלים הזמינים מהשרת של גוגל ישירות!
+try:
+    available_models = [
+        m.name.replace("models/", "") 
+        for m in genai.list_models() 
+        if 'generateContent' in m.supported_generation_methods
+    ]
+except Exception as e:
+    st.error(f"שגיאת תקשורת מול גוגל: {e}")
+    st.stop()
+
+if not available_models:
+    st.error("לא נמצאו מודלים נתמכים עבור מפתח זה. בדוק את הגדרות ה-API שלך בגוגל.")
+    st.stop()
+
+# בחירה חכמה של המודל הטוב ביותר שזמין ברשימה שקיבלנו
+preferred_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-pro"]
+selected_model_name = available_models[0] # ברירת המחדל הראשונה שגוגל מספקת
+for pref in preferred_models:
+    if pref in available_models:
+        selected_model_name = pref
+        break
+
 generation_config = {
   "temperature": 0.4,
   "top_p": 0.95,
@@ -159,14 +180,14 @@ generation_config = {
   "response_mime_type": "text/plain",
 }
 
-# שימוש במודל החדיש והמתקדם (דורש את הגרסה החדשה של הספרייה שהגדרנו)
+# שימוש במודל שזוהה בוודאות כפעיל!
 model = genai.GenerativeModel(
-  model_name="gemini-1.5-flash",
+  model_name=selected_model_name,
   generation_config=generation_config,
 )
 
 # ==========================================
-# 4. ניהול נתונים מקומיים (JSON) - משתמש ותורה
+# 4. ניהול נתונים מקומיים (JSON)
 # ==========================================
 DATA_DIR = "data"
 USER_DATA_FILE = os.path.join(DATA_DIR, "user_data.json")
@@ -195,7 +216,7 @@ def save_user_data(data):
         with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
     except Exception:
-        pass # מניעת קריסה במקרה של בעיות כתיבה בענן
+        pass
 
 if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
@@ -206,7 +227,6 @@ def load_local_database():
         try:
             with open(DB_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # וידוא שקובץ הנתונים הוא אכן מילון ולא רשימה/ריק
                 if isinstance(data, dict):
                     return data
                 return {}
@@ -219,7 +239,6 @@ local_db = load_local_database()
 @st.cache_data
 def build_fast_word_index(db):
     index = {}
-    # בניית האינדקס רק אם המאגר הוא בפורמט התקין
     if isinstance(db, dict):
         for title, text in db.items():
             if isinstance(text, str):
@@ -341,7 +360,7 @@ if 'search_query' not in st.session_state:
     st.session_state.search_query = ""
 
 # ==========================================
-# 9. סרגל הצד (Sidebar) - ניהול תיקיות ושיחות
+# 9. סרגל הצד (Sidebar)
 # ==========================================
 with st.sidebar:
     st.title("📚 מודול סוגיה בעיון")
@@ -453,9 +472,7 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
     
     st.header(current_chat["title"])
     
-    # 10א. שורת הגדרות: בחירת סגנון לימוד ומצב חיפוש מקורות
     col1, col2 = st.columns(2)
-    
     with col1:
         selected_style = st.selectbox(
             "סגנון לימוד", 
@@ -471,51 +488,42 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
 
     st.divider()
 
-    # 10ב. הצגת היסטוריית השיחה
     for msg in current_chat["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 10ג. קבלת קלט המשתמש ועיבוד התשובה
     if prompt := st.chat_input("שאל קושיה, בקש הסבר, או חפש מקור..."):
-        
-        # עדכון שם השיחה אם זו ההודעה הראשונה
         if current_chat["title"] == "שיחה חדשה":
             current_chat["title"] = prompt[:30] + "..." if len(prompt) > 30 else prompt
         
-        # שמירת הודעת המשתמש והצגתה
         current_chat["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
             
-        # יצירת תשובה מה-AI
         with st.chat_message("assistant"):
             with st.spinner("מעיין בספרים ומנסח תשובה..."):
-                
-                # משיכת הקשר (Context) לפי בחירת המשתמש
                 context = ""
                 if search_mode == "Sefaria (אונליין)":
                     context = search_sefaria(prompt)
                 elif search_mode == "RAG (מאגר מקומי)":
                     context = rag_local_search(prompt, local_db, local_index)
                 
-                # קריאה ל-Gemini
+                # אנחנו משתמשים במודל שזוהה בוודאות כזמין, ואפילו נציין איזה נבחר!
+                if current_chat.get("is_first_msg", True):
+                    st.caption(f"(פועל באמצעות המודל הזמין ביותר שלך: {selected_model_name})")
+                    current_chat["is_first_msg"] = False
+
                 response_text = get_gemini_response(prompt, context, selected_style)
-                
-                # הצגת התשובה
                 st.markdown(response_text)
                 
-                # אם נמצאו מקורות בחיפוש, נוסיף אותם כהערה מוסתרת (Expander) לנוחות הלומד
                 if context and search_mode != "ללא חיפוש":
                     with st.expander("📌 מקורות גולמיים שנמשכו (RAG / Sefaria)"):
                         st.text(context)
         
-        # שמירת התשובה במערכת ורינדור מחדש
         current_chat["messages"].append({"role": "assistant", "content": response_text})
         save_user_data(st.session_state.user_data)
         st.rerun()
 
 else:
-    # מסך פתיחה כאשר לא נבחרה שיחה
     st.title("ברוכים הבאים ל-AI סוגיה בעיון 📖")
     st.write("אנא בחר שיחה מהתפריט בצד ימין, או צור שיחה חדשה כדי להתחיל בלימוד.")
