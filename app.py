@@ -1,3 +1,9 @@
+"""
+=============================================================================
+פרוייקט - מודול AI סוגיה בעיון
+=============================================================================
+"""
+
 import streamlit as st
 import os
 import json
@@ -92,24 +98,24 @@ st.markdown("""
 # ==========================================
 load_dotenv()
 
-# ניסיון שליפה מ-env מקומי (תמיכה גם ב-GOOGLE_API_KEY וגם ב-GEMINI_API_KEY)
+# ניסיון שליפה מ-env מקומי או מ-st.secrets ב-Streamlit Cloud
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
-# אם לא קיים ב-env, ניסיון שליפה מ-st.secrets ב-Streamlit Cloud
 if not GOOGLE_API_KEY:
     try:
-        if "GEMINI_API_KEY" in st.secrets:
-            GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
-        elif "GOOGLE_API_KEY" in st.secrets:
+        if "GOOGLE_API_KEY" in st.secrets:
             GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+        elif "GEMINI_API_KEY" in st.secrets:
+            GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
     except Exception:
         pass
 
 if not GOOGLE_API_KEY:
-    st.error("⚠️ לא נמצא מפתח API של Google. ודא שהגדרת את GEMINI_API_KEY או GOOGLE_API_KEY ב-Secrets ב-Streamlit Cloud או בקובץ .env מקומי.")
+    st.error("⚠️ לא נמצא מפתח API של Google. ודא שהגדרת את GOOGLE_API_KEY ב-Secrets ב-Streamlit Cloud או בקובץ .env מקומי.")
     st.stop()
 
 genai.configure(api_key=GOOGLE_API_KEY)
+
 generation_config = {
   "temperature": 0.4,
   "top_p": 0.95,
@@ -118,10 +124,27 @@ generation_config = {
   "response_mime_type": "text/plain",
 }
 
-model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
-    generation_config=generation_config
-)
+def get_working_model_name():
+    """בוחר מודל תקין וזמין באופן דינמי כדי למנוע שגיאות 404"""
+    try:
+        available_models = [
+            m.name for m in genai.list_models() 
+            if 'generateContent' in m.supported_generation_methods
+        ]
+        preferred = [
+            'models/gemini-1.5-flash',
+            'models/gemini-2.0-flash',
+            'models/gemini-1.5-pro',
+            'models/gemini-pro'
+        ]
+        for p in preferred:
+            if p in available_models:
+                return p
+        if available_models:
+            return available_models[0]
+    except Exception:
+        pass
+    return 'gemini-1.5-flash'
 
 # ==========================================
 # 4. ניהול נתונים מקומיים (JSON)
@@ -237,6 +260,9 @@ def get_gemini_response(prompt, context, style):
     full_prompt = f"{system_instruction}\n\nהקשר/מקורות:\n{context}\n\nשאלה:\n{prompt}"
     
     retries = 3
+    model_name = get_working_model_name()
+    model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+    
     for attempt in range(retries):
         try:
             chat_session = model.start_chat(history=[])
