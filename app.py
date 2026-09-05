@@ -1,6 +1,9 @@
+כדי למנוע את תקלת המודלים לצמיתות, הקוד הבא מריץ מנגנון דינמי בזמן אמת (Dynamic Fallback): הוא שולף מ-Google API את רשימת כל המודלים הפעילים בחשבונך ומנסה אותם אחד אחרי השני בלולאה, כך שגם אם מודל מוסר או משתנה, המערכת עוברת אוטומטית למודל הבא ללא שגיאת 404.
+
+```python
 """
 =============================================================================
-פרויקט מלא - מודול AI סוגיה בעיון (גירסה מורחבת ושלמה)
+פרויקט מלא - מודול AI סוגיה בעיון (פתרון דינמי קבוע לתקלת מודלים)
 =============================================================================
 """
 
@@ -97,28 +100,6 @@ generation_config = {
   "max_output_tokens": 8192,
   "response_mime_type": "text/plain",
 }
-
-def get_working_model_name():
-    """מאתר אוטומטית מודל פעיל בחשבון למניעת שגיאות 404"""
-    try:
-        available_models = [
-            m.name for m in genai.list_models() 
-            if 'generateContent' in m.supported_generation_methods
-        ]
-        preferred = [
-            'models/gemini-1.5-flash',
-            'models/gemini-2.0-flash',
-            'models/gemini-1.5-pro',
-            'models/gemini-pro'
-        ]
-        for p in preferred:
-            if p in available_models:
-                return p
-        if available_models:
-            return available_models[0]
-    except Exception:
-        pass
-    return 'gemini-1.5-flash'
 
 # ==========================================
 # 4. ניהול נתונים מקומיים (JSON Persistence)
@@ -228,29 +209,56 @@ PROMPTS = {
 }
 
 # ==========================================
-# 7. קריאה לג'מיני
+# 7. מנוע ג'מיני דינמי - ניסיון בלולאה על כל המודלים הזמינים
 # ==========================================
 def get_gemini_response(prompt, context, style):
     system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
     full_prompt = f"{system_instruction}\n\nמקורות שנשלפו מספריא ומאגר הנתונים:\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
-    retries = 3
-    model_name = get_working_model_name()
-    model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
-    
-    for attempt in range(retries):
+    # 1. שליפה בלייב של כל המודלים הנתמכים בחשבון ה-API הנוכחי
+    available_models = []
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                available_models.append(m.name)
+    except Exception:
+        pass
+
+    # 2. סידור עדיפויות דינמי
+    ordered_models = []
+    for kw in ['flash', 'pro', 'gemini']:
+        for m in available_models:
+            if kw in m.lower() and m not in ordered_models:
+                ordered_models.append(m)
+    for m in available_models:
+        if m not in ordered_models:
+            ordered_models.append(m)
+
+    # גיבוי כללי במקרה שלרשימה הדינמית לקח זמן להיטען
+    fallback_defaults = [
+        'gemini-1.5-flash',
+        'gemini-2.0-flash',
+        'models/gemini-1.5-flash',
+        'models/gemini-2.0-flash'
+    ]
+    for fb in fallback_defaults:
+        if fb not in ordered_models:
+            ordered_models.append(fb)
+
+    # 3. ניסיון שליחה בלולאה - עובר אוטומטית למודל הבא אם משהו נכשל
+    last_error = ""
+    for model_name in ordered_models:
         try:
+            model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
             chat_session = model.start_chat(history=[])
             response = chat_session.send_message(full_prompt)
-            return response.text
+            if response and response.text:
+                return response.text
         except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "ResourceExhausted" in error_str:
-                if attempt < retries - 1:
-                    time.sleep(2)
-                    continue
-                return "המערכת עמוסה כרגע (Rate Limit). אנא המתן מספר שניות ונסה שוב."
-            return f"אירעה שגיאה בהפעלת המודל: {error_str}"
+            last_error = str(e)
+            continue
+
+    return f"אירעה שגיאה בחיבור למודלים הזמינים בחשבונך: {last_error}"
 
 # ==========================================
 # 8. ניהול Session State
@@ -441,3 +449,5 @@ else:
     * **סגנונות לימוד מותאמים:** בחירה בין הסבר מונגש, ניתוח ישיבתי-למדני, או הכנה למבחני רבנות.
     * **ניהול שיחות ותיקיות:** שמירת ההיסטוריה באופן מקומי וחלוקה לפי פרויקטים.
     """)
+
+```
