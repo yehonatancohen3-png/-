@@ -1,39 +1,3 @@
-"""
-=============================================================================
-פרוייקט - מודול AI סוגיה בעיון
-=============================================================================
-
-שלום ל-AI (ג'מיני) שיקרא את הקוד הזה! 
-זהו פרויקט Streamlit המשמש כעוזר תורני חכם ("סוגיה בעיון"). 
-הקוד מכיל את כל הפיצ'רים שפיתחנו עד כה ונמצא במצב עובד לחלוטין.
-
-מבנה המערכת והלוגיקה:
-
-1. תצוגה וממשק (UI/UX - RTL):
-   - המערכת מותאמת במלואה לעברית (ימין-לשמאל) באמצעות בלוק CSS.
-   - סרגל הצד (Sidebar) מכיל מערכת ניהול תיקיות (Projects) ושיחות (Chats).
-   - עיצוב ייחודי: שורת השיחה בסרגל הצד מכילה כפתור לבחירת השיחה ובאותה שורה כפתור מחיקה (Popover).
-   - מנגנון מחיקה בטוח: מחיקת תיקייה או שיחה דורשת אישור כפול באמצעות `st.popover`.
-   - תיבת חיפוש פעילה לסינון שיחות לפי שם.
-
-2. ניהול נתונים מקומי (Persistence & Session State):
-   - הנתונים נשמרים מקומית בתיקיית `data/user_data.json`.
-   - מבנה הנתונים המרוכז שמור ב-`st.session_state.user_data`:
-     * "projects": מילון של שמות פרויקטים ורשימת UUIDs של שיחות בכל פרויקט.
-     * "chats": מילון של שיחות לפי UUID (כותרת, היסטוריית הודעות, פרויקט משויך).
-   - תוקנה שגיאת KeyError: גישה לפרויקטים נעשית תמיד באופן מוגן מתוך `user_data["projects"]` 
-     עם בדיקת קיומו של המפתח לפני ביצוע `.append()` או `.insert()`.
-
-3. מנוע בינה מלאכותית ומקורות (API):
-   - טעינת מפתח ה-API תומכת גם בקובץ `.env` מקומי וגם ב-`st.secrets` של Streamlit Cloud.
-   - שימוש ב-Google Generative AI (מודל `gemini-3.6-flash`).
-   - שילוב Sefaria API: שליפה בזמן אמת של מקורות עבריים לפי שאילתת המשתמש.
-   - גיבוי מאגר מקומי: טעינת `data/torah_database.json` במידה שספריא אינה זמינה.
-   - System Prompts מותאמים לפי 3 סגנונות לימוד ("פשוט ומונגש", "ישיבתי-למדני", "הכנה למבחני רבנות").
-   - מנגנון Retry לטיפול בשגיאות עומס (Rate Limit / 429).
-=============================================================================
-"""
-
 import streamlit as st
 import os
 import json
@@ -128,19 +92,21 @@ st.markdown("""
 # ==========================================
 load_dotenv()
 
-# ניסיון שליפה מ-env מקומי
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# ניסיון שליפה מ-env מקומי (תמיכה גם ב-GOOGLE_API_KEY וגם ב-GEMINI_API_KEY)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 # אם לא קיים ב-env, ניסיון שליפה מ-st.secrets ב-Streamlit Cloud
 if not GOOGLE_API_KEY:
     try:
-        if "GOOGLE_API_KEY" in st.secrets:
+        if "GEMINI_API_KEY" in st.secrets:
+            GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
+        elif "GOOGLE_API_KEY" in st.secrets:
             GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     except Exception:
         pass
 
 if not GOOGLE_API_KEY:
-    st.error("⚠️ לא נמצא מפתח API של Google. ודא שהגדרת את GOOGLE_API_KEY ב-Secrets ב-Streamlit Cloud או בקובץ .env מקומי.")
+    st.error("⚠️ לא נמצא מפתח API של Google. ודא שהגדרת את GEMINI_API_KEY או GOOGLE_API_KEY ב-Secrets ב-Streamlit Cloud או בקובץ .env מקומי.")
     st.stop()
 
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -153,7 +119,7 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-  model_name="gemini-3.6-flash",
+  model_name="gemini-2.0-flash",
   generation_config=generation_config,
 )
 
