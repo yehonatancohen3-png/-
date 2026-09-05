@@ -1,12 +1,3 @@
-כדי למנוע את תקלת המודלים לצמיתות, הקוד הבא מריץ מנגנון דינמי בזמן אמת (Dynamic Fallback): הוא שולף מ-Google API את רשימת כל המודלים הפעילים בחשבונך ומנסה אותם אחד אחרי השני בלולאה, כך שגם אם מודל מוסר או משתנה, המערכת עוברת אוטומטית למודל הבא ללא שגיאת 404.
-
-```python
-"""
-=============================================================================
-פרויקט מלא - מודול AI סוגיה בעיון (פתרון דינמי קבוע לתקלת מודלים)
-=============================================================================
-"""
-
 import streamlit as st
 import os
 import json
@@ -28,11 +19,10 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. הזרקת CSS מותאם אישית (RTL ועיצוב מקיף)
+# 2. הזרקת CSS מותאם אישית (RTL ועיצוב)
 # ==========================================
 st.markdown("""
 <style>
-    /* כיווניות לימין (RTL) לכל רכיבי האתר */
     html, body, .stApp, .stSidebar, .stMarkdown, h1, h2, h3, h4, h5, h6, p, div, label, span {
         direction: rtl !important;
         text-align: right !important;
@@ -51,18 +41,15 @@ st.markdown("""
         padding-left: 0rem !important;
     }
     
-    /* הסתרת רכיבי סטרימליט מובנים */
     [data-testid="stToolbar"] {display: none;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* עיצוב כפתורים */
     .stButton>button {
         border-radius: 8px;
         transition: all 0.3s ease;
     }
     
-    /* עיצוב פופאובר למחיקה */
     [data-testid="stPopoverBody"] {
         direction: rtl !important;
         text-align: right !important;
@@ -209,13 +196,12 @@ PROMPTS = {
 }
 
 # ==========================================
-# 7. מנוע ג'מיני דינמי - ניסיון בלולאה על כל המודלים הזמינים
+# 7. מנוע ג'מיני דינמי - Dynamic Fallback
 # ==========================================
 def get_gemini_response(prompt, context, style):
     system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
     full_prompt = f"{system_instruction}\n\nמקורות שנשלפו מספריא ומאגר הנתונים:\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
-    # 1. שליפה בלייב של כל המודלים הנתמכים בחשבון ה-API הנוכחי
     available_models = []
     try:
         for m in genai.list_models():
@@ -224,7 +210,6 @@ def get_gemini_response(prompt, context, style):
     except Exception:
         pass
 
-    # 2. סידור עדיפויות דינמי
     ordered_models = []
     for kw in ['flash', 'pro', 'gemini']:
         for m in available_models:
@@ -234,7 +219,6 @@ def get_gemini_response(prompt, context, style):
         if m not in ordered_models:
             ordered_models.append(m)
 
-    # גיבוי כללי במקרה שלרשימה הדינמית לקח זמן להיטען
     fallback_defaults = [
         'gemini-1.5-flash',
         'gemini-2.0-flash',
@@ -245,7 +229,6 @@ def get_gemini_response(prompt, context, style):
         if fb not in ordered_models:
             ordered_models.append(fb)
 
-    # 3. ניסיון שליחה בלולאה - עובר אוטומטית למודל הבא אם משהו נכשל
     last_error = ""
     for model_name in ordered_models:
         try:
@@ -271,12 +254,11 @@ if 'search_query' not in st.session_state:
     st.session_state.search_query = ""
 
 # ==========================================
-# 9. סרגל צד (Sidebar) - ניהול פרויקטים ושיחות
+# 9. סרגל צד (Sidebar)
 # ==========================================
 with st.sidebar:
     st.title("📚 סוגיה בעיון - ניהול")
     
-    # 9.1 יצירת פרויקט חדש
     with st.expander("➕ פרויקט / תיקייה חדשה"):
         new_proj_name = st.text_input("שם הפרויקט החדש:")
         if st.button("צור פרויקט", use_container_width=True):
@@ -292,7 +274,6 @@ with st.sidebar:
 
     st.divider()
     
-    # 9.2 בחירת פרויקט פעיל
     project_names = list(st.session_state.user_data["projects"].keys())
     if not project_names:
         st.session_state.user_data["projects"]["כללי"] = []
@@ -312,7 +293,6 @@ with st.sidebar:
         st.session_state.current_chat_id = None
         st.rerun()
         
-    # 9.3 מחיקת פרויקט
     if selected_project != "כללי":
         with st.popover("🗑️ מחיקת פרויקט זה"):
             st.write(f"האם למחוק את הפרויקט **'{selected_project}'** וכל שיחותיו?")
@@ -329,7 +309,6 @@ with st.sidebar:
 
     st.divider()
     
-    # 9.4 יצירת שיחה חדשה
     if st.button("💬 שיחה חדשה", use_container_width=True, type="primary"):
         new_chat_id = str(uuid.uuid4())
         active_proj = st.session_state.current_project
@@ -349,10 +328,8 @@ with st.sidebar:
 
     st.divider()
     
-    # 9.5 חיפוש שיחות
     st.session_state.search_query = st.text_input("🔍 חיפוש שיחות:", value=st.session_state.search_query)
 
-    # 9.6 רשימת השיחות בפרויקט
     st.markdown("### שיחות בפרויקט")
     chat_ids = st.session_state.user_data["projects"].get(st.session_state.current_project, [])
     
@@ -368,7 +345,6 @@ with st.sidebar:
                     continue
                 
                 btn_type = "primary" if cid == st.session_state.current_chat_id else "secondary"
-                
                 col_btn, col_del = st.columns([0.82, 0.18], gap="small")
                 
                 with col_btn:
@@ -388,7 +364,7 @@ with st.sidebar:
                             st.rerun()
 
 # ==========================================
-# 10. מסך ראשי - אזור השיחה והלימוד
+# 10. מסך ראשי
 # ==========================================
 if st.session_state.current_chat_id and st.session_state.current_chat_id in st.session_state.user_data["chats"]:
     current_chat = st.session_state.user_data["chats"][st.session_state.current_chat_id]
@@ -406,15 +382,12 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
 
     st.divider()
 
-    # הצגת היסטוריית ההודעות בשיחה הנוכחית
     for msg in current_chat["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # קלט משתמש
     user_input = st.chat_input("הכנס שאלה או סוגיה בעיון...")
     if user_input:
-        # עדכון כותרת השיחה לפי השאלה הראשונה
         if len(current_chat["messages"]) == 0:
             current_chat["title"] = user_input[:32] + "..." if len(user_input) > 32 else user_input
         
@@ -437,7 +410,6 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
         st.rerun()
 
 else:
-    # מסך פתיחה כאשר אין שיחה פעילה
     st.title("📜 סוגיה בעיון - עוזר תורני אישי")
     st.caption("מנוע בינה מלאכותית מבוסס מקורות לניתוח סוגיות הלכתיות ולמדניות")
     
@@ -449,5 +421,3 @@ else:
     * **סגנונות לימוד מותאמים:** בחירה בין הסבר מונגש, ניתוח ישיבתי-למדני, או הכנה למבחני רבנות.
     * **ניהול שיחות ותיקיות:** שמירת ההיסטוריה באופן מקומי וחלוקה לפי פרויקטים.
     """)
-
-```
