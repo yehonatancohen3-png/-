@@ -119,8 +119,9 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-  model_name="gemini-2.0-flash",
-  generation_config=generation_config,
+    model_name='gemini-1.5-flash',  # ניתן להשתמש גם ב-'gemini-2.0-flash'
+    system_instruction=SYSTEM_PROMPT,
+    generation_config=generation_config
 )
 
 # ==========================================
