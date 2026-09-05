@@ -123,7 +123,7 @@ if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
 
 # ==========================================
-# 4. שליפה מהירה מספריא (קריאה יחידה ברשת)
+# 4. שליפה מהירה מספריא
 # ==========================================
 def clean_html_tags(text):
     return re.sub(r'<[^>]+>', '', text)
@@ -173,23 +173,39 @@ PROMPTS = {
 }
 
 # ==========================================
-# 6. מנוע ג'מיני מהיר
+# 6. מנוע ג'מיני - זיהוי דינמי ומטמון מהיר
 # ==========================================
-PREFERRED_MODELS = [
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.5-flash',
-    'models/gemini-1.5-flash',
-    'models/gemini-2.0-flash',
-    'gemini-1.5-pro'
-]
+@st.cache_resource(ttl=3600)
+def get_supported_models():
+    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון"""
+    try:
+        active_models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                active_models.append(m.name)
+        
+        # מיון מודלים לפי עדיפות: 3.6-flash, 2.5-flash וכו'
+        active_models.sort(key=lambda name: (
+            0 if '3.6-flash' in name else
+            1 if '2.5-flash' in name else
+            2 if 'flash' in name else 3
+        ))
+        if active_models:
+            return active_models
+    except Exception:
+        pass
+    
+    # ברירת מחדל מעודכנת למקרה שהשליפה נכשלה
+    return ['models/gemini-3.6-flash', 'models/gemini-2.5-flash']
 
 def get_gemini_response(prompt, context, style):
     system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
     full_prompt = f"{system_instruction}\n\nמקורות שנשלפו מספריא:\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
+    available_models = get_supported_models()
     last_error = ""
-    for model_name in PREFERRED_MODELS:
+    
+    for model_name in available_models:
         try:
             model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
             response = model.generate_content(full_prompt)
