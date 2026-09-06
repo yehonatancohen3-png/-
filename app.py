@@ -79,11 +79,11 @@ if not GOOGLE_API_KEY:
 genai.configure(api_key=GOOGLE_API_KEY)
 
 generation_config = {
-  "temperature": 0.2,
-  "top_p": 0.95,
-  "top_k": 64,
-  "max_output_tokens": 4096,
-  "response_mime_type": "text/plain",
+    "temperature": 0.2,
+    "top_p": 0.95,
+    "top_k": 64,
+    "max_output_tokens": 4096,
+    "response_mime_type": "text/plain",
 }
 
 # ==========================================
@@ -123,12 +123,15 @@ if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
 
 # ==========================================
-# 4. שליפה מהירה מספריא
+# 4. שליפה מהירה ומדויקת מספריא
 # ==========================================
 def clean_html_tags(text):
-    return re.sub(r'<[^>]+>', '', text)
+    clean = re.sub(r'<[^>]+>', '', text)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    return clean
 
 def search_sefaria(query, limit=3):
+    """שולף ציטוטים ומקורות מדויקים מ-API של ספריא"""
     url = "https://www.sefaria.org/api/v2/search/text"
     payload = {
         "query": query,
@@ -138,16 +141,16 @@ def search_sefaria(query, limit=3):
     }
     results_text = ""
     try:
-        response = requests.post(url, json=payload, timeout=3)
+        response = requests.post(url, json=payload, timeout=2.5)
         if response.status_code == 200:
             hits = response.json().get("hits", {}).get("hits", [])
-            for hit in hits:
+            for idx, hit in enumerate(hits, 1):
                 source = hit.get("_source", {})
                 ref = source.get("ref", "מקור לא ידוע")
                 he_text = source.get("he", "")
                 if isinstance(he_text, str) and he_text.strip():
                     clean_text = clean_html_tags(he_text)
-                    results_text += f"\nמקור מתוך ספריא [{ref}]:\n\"{clean_text}\"\n"
+                    results_text += f"\n[מקור {idx} מתוך ספריא - {ref}]:\n\"{clean_text}\"\n"
     except Exception:
         pass
     return results_text
@@ -158,64 +161,78 @@ def search_sefaria(query, limit=3):
 PROMPTS = {
     "פשוט ומונגש": """אתה עוזר תורני חכם ונגיש המנתח סוגיות בבהירות.
 * ענה בשפה פשוטה, מודרנית וברורה.
+* בעת ציטוט מקורות מספריא או מהמקורות, שלב אותם באופן טבעי בגוף התשובה.
 * המבנה הנדרש: הגדרת השאלה, יסוד הסוגיה, דעות מרכזיות, ומסקנה למעשה.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "ישיבתי-למדני (סגנון שו\"ת)": """אתה תלמיד חכם העונה בסגנון ישיבתי למדני ומעמיק.
 * השתמש בשפה תורנית מסורתית, מונחי לומדות ומשא ומתן סוגיאתי.
+* בסס את הדברים על המקורות המצורפים מספריא והבא ראיות נוספות.
 * חלק את התשובה ל'קושיה', 'תירוץ', 'יסוד הסוגיה', 'נפקא מינה'.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "הכנה למבחני רבנות": """אתה בוחן ורב המכין תלמידים למבחני הרבנות הראשית.
-* הצג השתלשלות הלכתית סדורה: מקורות מהתנ"ך והש"ס, ראשונים, שולחן ערוך, נושאי כלים ופוסקי זמננו.
+* הצג השתלשלות הלכתית סדורה: מקורות מהתנ"ך והש"ס (היעזר במקורות מספריא), ראשונים, שולחן ערוך, נושאי כלים ופוסקי זמננו.
+* ענה בפירוט, בדיוק מקסימלי ובמבנה סדור וברור.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """
 }
 
 # ==========================================
-# 6. מנוע ג'מיני - זיהוי דינמי ומטמון מהיר
+# 6. מנוע ג'מיני - זיהוי דינמי וריצה מהירה
 # ==========================================
-@st.cache_resource(ttl=3600)
-def get_supported_models():
-    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון"""
+@st.cache_resource(ttl=1800)
+def fetch_active_models():
+    """איתור דינמי של כל המודלים הפעילים בחשבון התומכים ביצירת תוכן"""
+    valid_models = []
     try:
-        active_models = []
-        for m in genai.list_models():
+        all_models = genai.list_models()
+        for m in all_models:
             if 'generateContent' in m.supported_generation_methods:
-                active_models.append(m.name)
+                valid_models.append(m.name)
         
-        # מיון מודלים לפי עדיפות: 3.6-flash, 2.5-flash וכו'
-        active_models.sort(key=lambda name: (
-            0 if '3.6-flash' in name else
-            1 if '2.5-flash' in name else
-            2 if 'flash' in name else 3
+        # מיון המודלים: תיעוד מודלים מהירים (Flash) בראש הרשימה למהירות תגובה מקסימלית
+        valid_models.sort(key=lambda name: (
+            0 if 'flash' in name.lower() else 1,
+            0 if '2.5' in name or '3.' in name else 1,
+            name
         ))
-        if active_models:
-            return active_models
     except Exception:
         pass
     
-    # ברירת מחדל מעודכנת למקרה שהשליפה נכשלה
-    return ['models/gemini-3.6-flash', 'models/gemini-2.5-flash']
+    # במידה והשליפה נכשלה, החזר רשימת גיבוי עם שמות תקניים של המודלים העדכניים
+    if not valid_models:
+        valid_models = [
+            'models/gemini-2.5-flash',
+            'models/gemini-1.5-flash',
+            'models/gemini-2.5-pro',
+            'models/gemini-1.5-pro'
+        ]
+    return valid_models
 
 def get_gemini_response(prompt, context, style):
     system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
-    full_prompt = f"{system_instruction}\n\nמקורות שנשלפו מספריא:\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
-    available_models = get_supported_models()
-    last_error = ""
+    context_str = f"מקורות שנשלפו מספריא:\n{context}\n\n" if context else "לא נשלפו מקורות חיצוניים מספריא.\n\n"
+    full_prompt = f"{system_instruction}\n\n{context_str}שאלה לניתוח:\n{prompt}"
     
-    for model_name in available_models:
+    candidate_models = fetch_active_models()
+    last_exception = ""
+    
+    for model_identifier in candidate_models:
         try:
-            model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+            model = genai.GenerativeModel(
+                model_name=model_identifier,
+                generation_config=generation_config
+            )
             response = model.generate_content(full_prompt)
             if response and response.text:
                 return response.text
-        except Exception as e:
-            last_error = str(e)
+        except Exception as err:
+            last_exception = str(err)
             continue
-
-    return f"אירעה שגיאה בחיבור למודלים: {last_error}"
+            
+    return f"⚠️ אירעה שגיאה בחיבור למודלים. פירוט השגיאה האחרונה: {last_exception}"
 
 # ==========================================
 # 7. ניהול Session State
@@ -351,13 +368,10 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             status_placeholder = st.empty()
             
             loading_messages = [
-                "יהונתן חושב...",
-                "יהונתן עומד לפתור את הסוגיה...",
-                "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
-                "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
-                "יהונתן צריך ריכוז...",
-                "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
-                "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
+                "מעבד את הנתונים ומחפש מודל זמין...",
+                "מריץ שאילתה מהירה מול API של ספריא...",
+                "מנתח את המקורות ההלכתיים והלמדניים...",
+                "מנסח תשובה מפורטת ומדויקת..."
             ]
 
             def execute_pipeline():
@@ -373,7 +387,7 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
                 while not future.done():
                     current_msg = loading_messages[msg_idx % len(loading_messages)]
                     status_placeholder.markdown(f"⏳ **{current_msg}**")
-                    time.sleep(2)
+                    time.sleep(1.2)
                     msg_idx += 1
                 
                 response_text = future.result()
