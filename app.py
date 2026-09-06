@@ -16,15 +16,100 @@ st.set_page_config(
     page_title="סוגיה בעיון - עוזר תורני אישי",
     page_icon="📖",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
+# ==========================================
+# עיצוב מותאם לעברית (RTL), מצב כהה וסרגל צד למובייל
+# ==========================================
 st.markdown("""
 <style>
-    html, body, .stApp, .stSidebar, .stMarkdown, h1, h2, h3, h4, h5, h6, p, div, label, span {
+    /* הגדרת כיווניות מימין לשמאל עבור רכיבי תוכן וטקסט */
+    html, body, .stApp, .stMarkdown, h1, h2, h3, h4, h5, h6, p, label, span {
         direction: rtl !important;
         text-align: right !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* מניעת גלישה אופקית */
+    html, body, .stApp {
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* מניעת מריחה: סרגל הצד כשהוא סגור מוסתר לחלוטין בכל גדלי המסכים */
+    section[data-testid="stSidebar"][aria-expanded="false"],
+    [data-testid="stSidebar"][aria-expanded="false"] {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: fixed !important;
+        right: -9999px !important;
+        transform: translateX(200vw) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="false"] * {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* הסתרת מודאל ההתראות המובנה של Streamlit שקופץ במרכז המסך */
+    div[data-testid="stSkillsNudgeAnchor"],
+    div[data-testid="stSkillsNudge"],
+    .stSkillsNudge,
+    div[data-testid="stSkillsNudgeAnchor"] * {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        width: 0 !important;
+    }
+
+    /* שמירה על סרגל הכלים העליון עבור כפתור פתיחת מסך הצד */
+    header[data-testid="stHeader"] {
+        display: block !important;
+        background: transparent !important;
+        z-index: 9999 !important;
+    }
+    
+    [data-testid="stToolbar"] {
+        display: flex !important;
+        visibility: visible !important;
+    }
+
+    /* כפתור פתיחת מסך הצד - נגיש ונוח ללחיצה */
+    [data-testid="stExpandSidebarButton"] {
+        display: flex !important;
+        visibility: visible !important;
+        z-index: 10000 !important;
+        background: rgba(240, 242, 246, 0.2) !important;
+        border-radius: 8px !important;
+        padding: 4px !important;
+        margin: 6px !important;
+        cursor: pointer !important;
+    }
+
+    /* הסתרת כפתורי מערכת שאינם נחוצים */
+    [data-testid="stAppDeployButton"], #MainMenu, [data-testid="stMainMenu"], footer {
+        display: none !important;
+    }
+
+    /* סרגל צד ב-RTL */
+    [data-testid="stSidebar"] {
+        direction: rtl !important;
+        text-align: right !important;
     }
     
     [data-testid="stChatMessage"], [data-testid="stChatInput"], div[data-baseweb="input"] {
@@ -39,10 +124,6 @@ st.markdown("""
         padding-left: 0rem !important;
     }
     
-    [data-testid="stToolbar"] {display: none;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
     .stButton>button {
         border-radius: 8px;
         transition: all 0.3s ease;
@@ -53,8 +134,71 @@ st.markdown("""
         text-align: right !important;
         min-width: 220px;
     }
+
+    /* התאמה ייעודית למכשירים ניידים */
+    @media (max-width: 768px) {
+        h1 {
+            font-size: 1.6rem !important;
+            word-wrap: break-word !important;
+            white-space: normal !important;
+            line-height: 1.3 !important;
+        }
+
+        .block-container {
+            max-width: 100% !important;
+            padding-top: 3.5rem !important;
+            padding-right: 1rem !important;
+            padding-left: 1rem !important;
+        }
+
+        /* סרגל צד פתוח במובייל - פתיחה מלאה מימין בצורה נקייה */
+        section[data-testid="stSidebar"][aria-expanded="true"],
+        [data-testid="stSidebar"][aria-expanded="true"] {
+            display: block !important;
+            visibility: visible !important;
+            position: fixed !important;
+            top: 0 !important;
+            right: 0 !important;
+            left: auto !important;
+            bottom: 0 !important;
+            width: 85vw !important;
+            max-width: 320px !important;
+            height: 100vh !important;
+            z-index: 999999 !important;
+            background-color: var(--background-color, #0e1117) !important;
+            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.7) !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            transform: none !important;
+        }
+
+        /* מניעת קריסה של רוחב התוכן בתוך סרגל הצד (ביטול מריחה אנכית של אותיות) */
+        [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarContent"],
+        [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarUserContent"] {
+            width: 100% !important;
+            min-width: 260px !important;
+            overflow-x: hidden !important;
+        }
+
+        /* כפתור סגירת הסרגל */
+        [data-testid="stSidebarCollapseButton"] {
+            display: block !important;
+            visibility: visible !important;
+        }
+
+        [data-testid="stSidebarCollapseButton"] button,
+        [data-testid="stSidebar"] button[aria-label="Close"] {
+            z-index: 1000000 !important;
+            cursor: pointer !important;
+            display: flex !important;
+            visibility: visible !important;
+            font-size: 1.5rem !important;
+            padding: 8px !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ==========================================
 # 2. הגדרת מפתח Google API
@@ -79,11 +223,11 @@ if not GOOGLE_API_KEY:
 genai.configure(api_key=GOOGLE_API_KEY)
 
 generation_config = {
-    "temperature": 0.2,
-    "top_p": 0.95,
-    "top_k": 64,
-    "max_output_tokens": 4096,
-    "response_mime_type": "text/plain",
+  "temperature": 0.2,
+  "top_p": 0.95,
+  "top_k": 64,
+  "max_output_tokens": 4096,
+  "response_mime_type": "text/plain",
 }
 
 # ==========================================
@@ -123,15 +267,12 @@ if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
 
 # ==========================================
-# 4. שליפה מהירה ומדויקת מספריא
+# 4. שליפה מהירה מספריא
 # ==========================================
 def clean_html_tags(text):
-    clean = re.sub(r'<[^>]+>', '', text)
-    clean = re.sub(r'\s+', ' ', clean).strip()
-    return clean
+    return re.sub(r'<[^>]+>', '', text)
 
 def search_sefaria(query, limit=3):
-    """שולף ציטוטים ומקורות מדויקים מ-API של ספריא"""
     url = "https://www.sefaria.org/api/v2/search/text"
     payload = {
         "query": query,
@@ -141,16 +282,16 @@ def search_sefaria(query, limit=3):
     }
     results_text = ""
     try:
-        response = requests.post(url, json=payload, timeout=2.5)
+        response = requests.post(url, json=payload, timeout=3)
         if response.status_code == 200:
             hits = response.json().get("hits", {}).get("hits", [])
-            for idx, hit in enumerate(hits, 1):
+            for hit in hits:
                 source = hit.get("_source", {})
                 ref = source.get("ref", "מקור לא ידוע")
                 he_text = source.get("he", "")
                 if isinstance(he_text, str) and he_text.strip():
                     clean_text = clean_html_tags(he_text)
-                    results_text += f"\n[מקור {idx} מתוך ספריא - {ref}]:\n\"{clean_text}\"\n"
+                    results_text += f"\nמקור מתוך ספריא [{ref}]:\n\"{clean_text}\"\n"
     except Exception:
         pass
     return results_text
@@ -161,78 +302,64 @@ def search_sefaria(query, limit=3):
 PROMPTS = {
     "פשוט ומונגש": """אתה עוזר תורני חכם ונגיש המנתח סוגיות בבהירות.
 * ענה בשפה פשוטה, מודרנית וברורה.
-* בעת ציטוט מקורות מספריא או מהמקורות, שלב אותם באופן טבעי בגוף התשובה.
 * המבנה הנדרש: הגדרת השאלה, יסוד הסוגיה, דעות מרכזיות, ומסקנה למעשה.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "ישיבתי-למדני (סגנון שו\"ת)": """אתה תלמיד חכם העונה בסגנון ישיבתי למדני ומעמיק.
 * השתמש בשפה תורנית מסורתית, מונחי לומדות ומשא ומתן סוגיאתי.
-* בסס את הדברים על המקורות המצורפים מספריא והבא ראיות נוספות.
 * חלק את התשובה ל'קושיה', 'תירוץ', 'יסוד הסוגיה', 'נפקא מינה'.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "הכנה למבחני רבנות": """אתה בוחן ורב המכין תלמידים למבחני הרבנות הראשית.
-* הצג השתלשלות הלכתית סדורה: מקורות מהתנ"ך והש"ס (היעזר במקורות מספריא), ראשונים, שולחן ערוך, נושאי כלים ופוסקי זמננו.
-* ענה בפירוט, בדיוק מקסימלי ובמבנה סדור וברור.
+* הצג השתלשלות הלכתית סדורה: מקורות מהתנ"ך והש"ס, ראשונים, שולחן ערוך, נושאי כלים ופוסקי זמננו.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """
 }
 
 # ==========================================
-# 6. מנוע ג'מיני - זיהוי דינמי וריצה מהירה
+# 6. מנוע ג'מיני - זיהוי דינמי ומטמון מהיר
 # ==========================================
-@st.cache_resource(ttl=1800)
-def fetch_active_models():
-    """איתור דינמי של כל המודלים הפעילים בחשבון התומכים ביצירת תוכן"""
-    valid_models = []
+@st.cache_resource(ttl=3600)
+def get_supported_models():
+    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון"""
     try:
-        all_models = genai.list_models()
-        for m in all_models:
+        active_models = []
+        for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
-                valid_models.append(m.name)
+                active_models.append(m.name)
         
-        # מיון המודלים: תיעוד מודלים מהירים (Flash) בראש הרשימה למהירות תגובה מקסימלית
-        valid_models.sort(key=lambda name: (
-            0 if 'flash' in name.lower() else 1,
-            0 if '2.5' in name or '3.' in name else 1,
-            name
+        # מיון מודלים לפי עדיפות: 3.6-flash, 2.5-flash וכו'
+        active_models.sort(key=lambda name: (
+            0 if '3.6-flash' in name else
+            1 if '2.5-flash' in name else
+            2 if 'flash' in name else 3
         ))
+        if active_models:
+            return active_models
     except Exception:
         pass
     
-    # במידה והשליפה נכשלה, החזר רשימת גיבוי עם שמות תקניים של המודלים העדכניים
-    if not valid_models:
-        valid_models = [
-            'models/gemini-2.5-flash',
-            'models/gemini-1.5-flash',
-            'models/gemini-2.5-pro',
-            'models/gemini-1.5-pro'
-        ]
-    return valid_models
+    # ברירת מחדל מעודכנת למקרה שהשליפה נכשלה
+    return ['models/gemini-3.6-flash', 'models/gemini-2.5-flash']
 
 def get_gemini_response(prompt, context, style):
     system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
+    full_prompt = f"{system_instruction}\n\nמקורות שנשלפו מספריא:\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
-    context_str = f"מקורות שנשלפו מספריא:\n{context}\n\n" if context else "לא נשלפו מקורות חיצוניים מספריא.\n\n"
-    full_prompt = f"{system_instruction}\n\n{context_str}שאלה לניתוח:\n{prompt}"
+    available_models = get_supported_models()
+    last_error = ""
     
-    candidate_models = fetch_active_models()
-    last_exception = ""
-    
-    for model_identifier in candidate_models:
+    for model_name in available_models:
         try:
-            model = genai.GenerativeModel(
-                model_name=model_identifier,
-                generation_config=generation_config
-            )
+            model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
             response = model.generate_content(full_prompt)
             if response and response.text:
                 return response.text
-        except Exception as err:
-            last_exception = str(err)
+        except Exception as e:
+            last_error = str(e)
             continue
-            
-    return f"⚠️ אירעה שגיאה בחיבור למודלים. פירוט השגיאה האחרונה: {last_exception}"
+
+    return f"אירעה שגיאה בחיבור למודלים: {last_error}"
 
 # ==========================================
 # 7. ניהול Session State
@@ -368,10 +495,13 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             status_placeholder = st.empty()
             
             loading_messages = [
-                "מעבד את הנתונים ומחפש מודל זמין...",
-                "מריץ שאילתה מהירה מול API של ספריא...",
-                "מנתח את המקורות ההלכתיים והלמדניים...",
-                "מנסח תשובה מפורטת ומדויקת..."
+                "יהונתן חושב...",
+                "יהונתן עומד לפתור את הסוגיה...",
+                "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
+                "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
+                "יהונתן צריך ריכוז...",
+                "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
+                "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
             ]
 
             def execute_pipeline():
@@ -387,7 +517,7 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
                 while not future.done():
                     current_msg = loading_messages[msg_idx % len(loading_messages)]
                     status_placeholder.markdown(f"⏳ **{current_msg}**")
-                    time.sleep(1.2)
+                    time.sleep(2)
                     msg_idx += 1
                 
                 response_text = future.result()
