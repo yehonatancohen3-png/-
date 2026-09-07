@@ -292,6 +292,79 @@ def remove_cantillation_and_niqqud(text):
     cleaned = re.sub(r'[\"״״”"\'׳]', '', cleaned)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
+TALMUD_TRACTATES = [
+    'Berakhot', 'Shabbat', 'Eruvin', 'Pesachim', 'Rosh Hashanah', 'Yoma', 'Sukkah',
+    'Beitzah', 'Taanit', 'Megillah', 'Moed Katan', 'Chagigah', 'Yevamot', 'Ketubot',
+    'Nedarim', 'Nazir', 'Sotah', 'Gittin', 'Kiddushin', 'Bava Kamma', 'Bava Metzia',
+    'Bava Batra', 'Sanhedrin', 'Makkot', 'Shevuot', 'Avodah Zarah', 'Horayot',
+    'Zevachim', 'Menachot', 'Chullin', 'Bekhorot', 'Arakhin', 'Temurah', 'Keritot',
+    'Meilah', 'Tamid', 'Niddah'
+]
+TALMUD_REGEX = r'^(' + '|'.join(TALMUD_TRACTATES) + r')\s+\d+[ab](\b|:)'
+
+def get_source_category_and_score(ref):
+    """דירוג מקורות לפי קאנון תורני קלאסי: משנה -> תלמוד -> רמב"ם -> שו"ע -> מפרשים -> שאר"""
+    is_primary = " on " not in ref
+    
+    # 0: משנה מקורית (למעט משנה ברורה)
+    if is_primary and re.search(r'^Mishnah\b', ref, re.IGNORECASE) and not ref.startswith("Mishnah Berurah"):
+        return "mishnah", 0
+    # 1: תלמוד בבלי / ירושלמי מקורי
+    if is_primary and (re.search(TALMUD_REGEX, ref, re.IGNORECASE) or ref.startswith("Jerusalem Talmud")):
+        return "talmud", 1
+    # 2: רמב"ם משנה תורה מקורי
+    if is_primary and (ref.startswith("Mishneh Torah") or ref.startswith("Rambam")):
+        return "rambam", 2
+    # 3: שולחן ערוך מקורי
+    if is_primary and (ref.startswith("Shulchan Arukh") or ref.startswith("Shulhan Arukh")):
+        return "shulchan_arukh", 3
+    
+    # מפרשים ונושאי כלים
+    if " on Mishnah" in ref:
+        return "commentary", 5
+    if any(f" on {tr}" in ref for tr in TALMUD_TRACTATES):
+        return "commentary", 6
+    if " on Mishneh Torah" in ref:
+        return "commentary", 7
+    if " on Shulchan Arukh" in ref or " on Shulhan Arukh" in ref:
+        return "commentary", 8
+    
+    return "other", 10
+
+def extract_keywords_for_expansion(query):
+    """פירוק שאילתה למילות מפתח מהותיות לצורך הרחבת נושא (Topic Expansion)"""
+    cleaned = re.sub(r'[?.,!;:״"״”()ֿ\-\_]', ' ', query)
+    stop_prefixes = [
+        r'^מה הדין (של |ב-|ב)?',
+        r'^מה ההלכה (של |ב-|ב)?',
+        r'^האם ',
+        r'^מדוע ',
+        r'^למה ',
+        r'^כיצד ',
+        r'^מאימתי ',
+        r'^סוגיית ',
+        r'^סוגית ',
+        r'^דין ',
+        r'^כלל '
+    ]
+    for sp in stop_prefixes:
+        cleaned = re.sub(sp, '', cleaned).strip()
+    
+    stop_words = {'מה', 'מי', 'איזה', 'איך', 'כיצד', 'למה', 'מדוע', 'האם', 'של', 'על', 'אל', 'זה', 'זו', 'אלה', 'כל', 'רק', 'אם', 'אין', 'שאין'}
+    words = [w for w in cleaned.split() if w not in stop_words and len(w) > 1]
+    return " ".join(words)
+
+def execute_sefaria_search(query_str, size=40):
+    """קריאת חיפוש מול search-wrapper של ספריא"""
+    url = "https://www.sefaria.org/api/search-wrapper"
+    try:
+        r = HTTP_SESSION.post(url, json={"query": query_str, "size": size}, timeout=3.0)
+        if r.status_code == 200:
+            return r.json().get("hits", {}).get("hits", [])
+    except Exception:
+        pass
+    return []
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_single_ref_text(ref_name, timeout=2.0):
     """שליפת קטע טקסט בודד מספריא לפי Ref עם Timeout מוגדר ומטמון ל-24 שעות"""
@@ -310,80 +383,150 @@ def fetch_single_ref_text(ref_name, timeout=2.0):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def search_sefaria_fast(query, max_results=5):
-    """שליפה מקבילית מואצת ביותר מספריא - הרצת Ref ו-Search בו-זמנית עם שמירת מטמון ל-24 שעות"""
+    """
+    שליפה מקבילית רב-שלבית מספריא:
+    1. ביטוי מדויק (Strict Exact-Phrase Search): חיפוש הביטוי המדויק עם מרכאות ווריאציות אותיות שימוש.
+    2. הרחבת נושא (Topic Expansion): אם אין תוצאות, פירוק למילות מפתח ושליפת מקורות יסוד קלאסיים (משנה, תלמוד, רמב"ם, שו"ע).
+    3. שמירה במטמון ל-24 שעות ושליפת טקסטים מלאים במקביל.
+    """
+    clean_q = query.strip().strip('"״”\'')
+    if not clean_q:
+        return []
+
+    collected_hits = []
+    seen_refs = set()
+    direct_res = None
+
+    # 1. בדיקת מראה מקום ישיר (Direct Ref)
+    direct_url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(clean_q)}?context=0"
+    try:
+        d_res = HTTP_SESSION.get(direct_url, timeout=1.5)
+        if d_res.status_code == 200:
+            d_json = d_res.json()
+            he_val = d_json.get("he")
+            if he_val:
+                text_content = clean_html_tags(" ".join([str(x) for x in he_val])) if isinstance(he_val, list) else clean_html_tags(str(he_val))
+                ref_name = d_json.get("ref", clean_q)
+                cat, score = get_source_category_and_score(ref_name)
+                direct_res = {
+                    "ref": ref_name,
+                    "text": text_content,
+                    "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_name)}",
+                    "priority": score,
+                    "category": cat
+                }
+                seen_refs.add(ref_name)
+    except Exception:
+        pass
+
+    # שלב 1: חיפוש ביטוי מדויק (Strict Exact-Phrase Search)
+    exact_queries = [f'"{clean_q}"']
+    if clean_q.startswith("אין "):
+        exact_queries.append(f'"ש{clean_q}"')
+        exact_queries.append(f'"{clean_q[4:].strip()}"')
+    elif not clean_q.startswith("ש"):
+        exact_queries.append(f'"ש{clean_q}"')
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(execute_sefaria_search, eq, 40) for eq in exact_queries]
+        for f in futures:
+            for hit in f.result():
+                raw_id = hit.get("_id", "")
+                m = re.match(r'^([^(]+)', raw_id)
+                clean_ref = m.group(1).strip() if m else raw_id
+                if clean_ref not in seen_refs:
+                    seen_refs.add(clean_ref)
+                    collected_hits.append(hit)
+
+    # שלב 2: הרחבת נושא (Topic Expansion)
+    # אם החיפוש המדויק לא החזיר תוצאות או שלא נמצאו מקורות קלאסיים (משנה, תלמוד, רמב"ם)
+    has_classic = any(
+        get_source_category_and_score(re.match(r'^([^(]+)', h.get("_id","")).group(1).strip())[1] <= 3
+        for h in collected_hits if re.match(r'^([^(]+)', h.get("_id",""))
+    )
+
+    if len(collected_hits) == 0 or not has_classic:
+        expanded_keywords = extract_keywords_for_expansion(clean_q)
+        if expanded_keywords and expanded_keywords != clean_q:
+            kw_hits = execute_sefaria_search(expanded_keywords, size=40)
+            for hit in kw_hits:
+                raw_id = hit.get("_id", "")
+                m = re.match(r'^([^(]+)', raw_id)
+                clean_ref = m.group(1).strip() if m else raw_id
+                if clean_ref not in seen_refs:
+                    seen_refs.add(clean_ref)
+                    collected_hits.append(hit)
+
+    # חילוץ ודירוג המועמדים
+    candidates = []
+    for hit in collected_hits:
+        raw_id = hit.get("_id", "")
+        m = re.match(r'^([^(]+)', raw_id)
+        clean_ref = m.group(1).strip() if m else raw_id
+        
+        highlights = hit.get("highlight", {})
+        hl_list = []
+        for v in highlights.values():
+            if isinstance(v, list):
+                hl_list.extend(v)
+        snippet = clean_html_tags(" ... ".join(hl_list))
+        
+        cat, score = get_source_category_and_score(clean_ref)
+        candidates.append({
+            "ref": clean_ref,
+            "snippet": snippet,
+            "category": cat,
+            "priority": score
+        })
+
+    # בחירת מקורות יסוד קלאסיים מגוונים (משנה, תלמוד, רמב"ם, שו"ע)
+    selected_candidates = []
+    category_buckets = {"mishnah": [], "talmud": [], "rambam": [], "shulchan_arukh": [], "commentary": [], "other": []}
+    for c in candidates:
+        category_buckets.setdefault(c["category"], []).append(c)
+
+    # 1. קודם כל נציג מכל קבוצה קלאסית מרכזית שנמצאה
+    for cat_name in ["mishnah", "talmud", "rambam", "shulchan_arukh"]:
+        if category_buckets[cat_name]:
+            selected_candidates.append(category_buckets[cat_name].pop(0))
+
+    # 2. השלמת יתרת המקומות לפי עדיפות הניקוד הקלאסי
+    remaining = []
+    for bucket in category_buckets.values():
+        remaining.extend(bucket)
+    remaining.sort(key=lambda x: x["priority"])
+
+    while len(selected_candidates) < max_results and remaining:
+        selected_candidates.append(remaining.pop(0))
+
+    # שליפת טקסטים מלאים במקביל עבור המקורות הנבחרים
     results = []
-    
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        # שליפה ישירה כ-Ref וחיפוש טקסטואלי במקביל
-        direct_url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(query.strip())}?context=0"
-        direct_future = executor.submit(lambda: HTTP_SESSION.get(direct_url, timeout=2.0))
-        
-        search_url = "https://www.sefaria.org/api/search-wrapper"
-        payload = {"query": query, "size": max_results}
-        search_future = executor.submit(lambda: HTTP_SESSION.post(search_url, json=payload, timeout=2.5))
-        
-        # 1. בדיקת תוצאת שליפה ישירה
-        try:
-            d_res = direct_future.result()
-            if d_res.status_code == 200:
-                d = d_res.json()
-                he_val = d.get("he")
-                if he_val:
-                    text_content = clean_html_tags(" ".join([str(x) for x in he_val])) if isinstance(he_val, list) else clean_html_tags(str(he_val))
-                    ref_name = d.get("ref", query)
-                    results.append({
-                        "ref": ref_name,
-                        "text": text_content,
-                        "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_name)}"
-                    })
-        except Exception:
-            pass
-            
-        # 2. עיבוד תוצאות חיפוש מ-search-wrapper
-        candidate_refs = []
-        try:
-            s_res = search_future.result()
-            if s_res.status_code == 200:
-                hits = s_res.json().get("hits", {}).get("hits", [])
-                for hit in hits:
-                    raw_id = hit.get("_id", "")
-                    ref_match = re.match(r'^([^(]+)', raw_id)
-                    clean_ref = ref_match.group(1).strip() if ref_match else raw_id
-                    
-                    if any(s["ref"] == clean_ref for s in results):
-                        continue
-                    
-                    # חילוץ highlight כגיבוי מהיר
-                    highlights = hit.get("highlight", {})
-                    hl_list = []
-                    for v in highlights.values():
-                        if isinstance(v, list):
-                            hl_list.extend(v)
-                    snippet = clean_html_tags(" ... ".join(hl_list))
-                    candidate_refs.append((clean_ref, snippet))
-        except Exception:
-            pass
-        
-        # שליפה מקבילית של כל הטקסטים המלאים בו-זמנית
-        if candidate_refs:
-            fetch_futures = {executor.submit(fetch_single_ref_text, ref): (ref, snip) for ref, snip in candidate_refs[:max_results]}
-            for fut in as_completed(fetch_futures):
-                ref, snip = fetch_futures[fut]
+    if direct_res:
+        results.append(direct_res)
+
+    if selected_candidates:
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_map = {executor.submit(fetch_single_ref_text, c["ref"]): c for c in selected_candidates[:max_results]}
+            for fut in as_completed(future_map):
+                c = future_map[fut]
                 full_text = None
                 try:
                     full_text = fut.result()
                 except Exception:
                     pass
-                final_text = full_text if full_text else snip
-                if final_text and not any(s["ref"] == ref for s in results):
+                final_text = full_text if full_text else c["snippet"]
+                if final_text and not any(r["ref"] == c["ref"] for r in results):
                     results.append({
-                        "ref": ref,
+                        "ref": c["ref"],
                         "text": final_text,
-                        "url": f"https://www.sefaria.org/{urllib.parse.quote(ref)}"
+                        "url": f"https://www.sefaria.org/{urllib.parse.quote(c['ref'])}",
+                        "priority": c["priority"],
+                        "category": c["category"]
                     })
                     if len(results) >= max_results:
                         break
-                        
+
+    results.sort(key=lambda x: x.get("priority", 10))
     return results[:max_results]
 
 @st.cache_data(ttl=86400, show_spinner=False)
