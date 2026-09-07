@@ -394,14 +394,29 @@ HEBREW_TANAKH = [
 CONCEPTUAL_EXPANSIONS = {
     "שעות זמניות": {
         "refs": [
-            "Shulchan Arukh, Orach Chayim 233:1",
+            "Pesachim 93b",
+            "Pesachim 94a",
+            "Berakhot 9b",
+            "Berakhot 26b",
             "Mishnah Berakhot 1:2",
             "Mishnah Berakhot 4:1",
-            "Berakhot 26b",
+            "Shulchan Arukh, Orach Chayim 233:1",
             "Mishneh Torah, Reading the Shema 1:9",
             "Mishneh Torah, Prayer and the Priestly Blessing 3:1"
         ],
-        "queries": ["שעות ביום", "עד שלש שעות", "ארבע שעות", "שיעור שעות"]
+        "queries": ["שעות ביום", "עד שלש שעות", "ארבע שעות", "שיעור שעות", "מעלות השחר ועד הנץ החמה", "עוביו של רקיע"]
+    },
+    "זמני היום": {
+        "refs": [
+            "Pesachim 93b",
+            "Pesachim 94a",
+            "Berakhot 2b",
+            "Berakhot 9b",
+            "Berakhot 26b",
+            "Shulchan Arukh, Orach Chayim 233:1",
+            "Mishneh Torah, Reading the Shema 1:9"
+        ],
+        "queries": ["זמני היום", "עלות השחר", "הנץ החמה", "שקיעת החמה", "צאת הכוכבים"]
     },
     "אין דוחין נפש מפני נפש": {
         "refs": [
@@ -825,7 +840,7 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
 search_sefaria_sources = get_sefaria_sources_robust
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_fast(query: str, max_results: int = 7):
+def search_sefaria_fast(query: str, max_results: int = 10):
     """
     שליפה מובנית מספריא באמצעות מנוע השליפה המשופר והמתועדף (get_sefaria_sources_robust)
     ומחזירה רשימת אובייקטים מובנים עבור ממשק המשתמש ושכבת האימות,
@@ -854,7 +869,7 @@ def search_sefaria_fast(query: str, max_results: int = 7):
     return results
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_and_local(query, max_results=7):
+def search_sefaria_and_local(query, max_results=10):
     """שילוב מיידי של מקורות מקומיים עם תוצאות ספריא המתועדפות לפי קטגוריות ראשיות"""
     sources = []
     
@@ -1161,10 +1176,10 @@ def analyze_sugya(messages, style_mode="פשוט ומונגש", use_sefaria=None
     sources = []
     if should_use_sefaria:
         try:
-            sources = search_sefaria_and_local(user_prompt, max_results=7)
+            sources = search_sefaria_and_local(user_prompt, max_results=10)
         except Exception:
             try:
-                sources = search_sefaria_fast(user_prompt, max_results=7)
+                sources = search_sefaria_fast(user_prompt, max_results=10)
             except Exception:
                 sources = []
 
