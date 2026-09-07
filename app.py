@@ -729,19 +729,31 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
         ("Global", None)
     ]
 
-    # הכנת שאילתות להרצה (השאילתה המקורית + שאילתות מורחבות אם יש)
+    # הכנת שאילתות להרצה: השאילתה המקורית, הרחבות מושגיות, ופירוק לביגרמות להבטחת שליפת הגמרא
+    words = [w for w in re.split(r'\s+', clean_query) if len(w) > 2]
+    decomposed_subqueries = []
+    for i in range(len(words) - 1):
+        decomposed_subqueries.append(f"{words[i]} {words[i+1]}")
+    stopwords = {'האם', 'למה', 'מדוע', 'כיצד', 'הוא', 'היא', 'אשר', 'על', 'אל', 'את', 'זה', 'זו', 'של', 'עם', 'מהו', 'מהי'}
+    decomposed_subqueries.extend([w for w in words if w not in stopwords])
+
     search_queries = [clean_query]
     if expanded_queries:
         search_queries.extend(expanded_queries[:2])
+    for dsq in decomposed_subqueries:
+        if dsq not in search_queries:
+            search_queries.append(dsq)
 
     def query_category(cat_info):
         cat_name, cat_filter = cat_info
         results = []
-        for q in search_queries:
+        # עבור תלמוד ומשנה סורקים את תת-השאילתות כדי להבטיח את מציאת סוגיית הגמרא בארמית/חז"ל
+        queries_to_run = search_queries[:5] if cat_name in ["Talmud/Bavli", "Mishnah"] else search_queries[:2]
+        for q in queries_to_run:
             payload = {
                 "query": q,
                 "type": "text",
-                "size": 3,
+                "size": 4,
                 "field": "naive_lemmatizer"
             }
             if cat_filter:
@@ -752,10 +764,13 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
                 if res.status_code == 200:
                     hits = res.json().get("hits", {}).get("hits", [])
                     for h in hits:
+                        raw_id = h.get("_id", "")
+                        if "Introduction" in raw_id:
+                            continue
                         results.append(h)
             except Exception:
                 pass
-            if len(results) >= 3:
+            if len(results) >= 4:
                 break
         return results
 
@@ -937,9 +952,10 @@ SYSTEM_PROMPT = """אתה עוזר מחקר תורני, הלכתי ולמדני.
 6. הלכה למעשה (חובה לפרט לפי מנהגי ופסיקות עדות: אשכנז, ספרד, ותימן)
 
 חוקי ברזל לציטוטים ולשפה:
-- דיוק מילולי מוחלט (Verbatim): כל ציטוט מתוך המקורות חייב להיות מועתק אות-באות ומילה-במילה מתוך המקורות שנשלפו. אסור להמציא או לשחזר ציטוטים מהזיכרון.
+- חובת הבאת מקורות וציטוטים מהגמרא: בסעיף 2 ('מקור בגמרא'), חובה לציין במדויק את שם המסכת והדף (למשל: "מסכת ברכות דף ב עמוד א", "מסכת שבת דף קכד עמוד א"). כאשר מופיעים מקורות מהגמרא במאגר שנשלף, חובה לשלב ציטוטים מילוליים ישירים במרכאות ("...").
+- דיוק מילולי מוחלט (Verbatim): כל ציטוט מתוך המקורות שנשלפו חייב להיות מועתק אות-באות ומילה-במילה מתוך המקורות. אסור להמציא או לשנות ציטוטים.
 - עברית בלבד: כל מראי המקומות, שמות הספרים והמחברים חייבים להופיע בלשון הקודש/עברית בלבד (ללא שמות באנגלית).
-- חובת הודעה על חסר: אם מקור מסוים אינו מופיע בטקסט שנשלף, הסבר את הסוגיה בלשונך וציין בקצרה שהציטוט המילולי לא נשלף במלואו."""
+- חובת הודעה על חסר: אם מקור מסוים אינו מופיע בטקסט שנשלף, הסבר את הסוגיה בהרחבה בלשונך וציין בקצרה שהציטוט המילולי לא נשלף במלואו."""
 
 PROMPTS = {
     "פשוט ומונגש": f"""{SYSTEM_PROMPT}
