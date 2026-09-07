@@ -224,7 +224,7 @@ if not GOOGLE_API_KEY:
 genai.configure(api_key=GOOGLE_API_KEY)
 
 generation_config = {
-  "temperature": 0.2,
+  "temperature": 0.0,
   "top_p": 0.95,
   "top_k": 64,
   "max_output_tokens": 8192,
