@@ -1314,12 +1314,12 @@ def get_supported_models():
                     active_models.append(m.name)
         
         active_models.sort(key=lambda name: (
-            0 if '3.7-flash' in name else
-            1 if '3.8-flash' in name else
-            2 if '3.6-flash' in name else
-            3 if 'flash-latest' in name else
-            4 if '3.5-flash' in name else
-            5 if '2.5-flash' in name else
+            0 if '3.7-flash' in name and 'lite' not in name else
+            1 if '3.6-flash' in name and 'lite' not in name else
+            2 if '3.1-flash-lite' in name else
+            3 if 'flash-lite-latest' in name else
+            4 if 'flash-latest' in name else
+            5 if '3.5-flash' in name else
             6 if 'flash' in name else 7
         ))
         if active_models:
@@ -1327,10 +1327,19 @@ def get_supported_models():
     except Exception:
         pass
     
-    return ['models/gemini-3.7-flash', 'models/gemini-3.6-flash', 'models/gemini-flash-latest', 'models/gemini-2.5-flash']
+    return ['models/gemini-3.7-flash', 'models/gemini-3.6-flash', 'models/gemini-3.1-flash-lite', 'models/gemini-flash-lite-latest', 'models/gemini-flash-latest']
+
+def stitch_continuation(original: str, continuation: str) -> str:
+    """מסיר כפילויות חופפות בין סיום הטקסט הקודם לתחילת ההמשך כדי להבטיח רצף קריאה מושלם"""
+    orig_clean = original.rstrip()
+    max_overlap = min(len(orig_clean), len(continuation), 180)
+    for i in range(max_overlap, 5, -1):
+        if orig_clean.endswith(continuation[:i].rstrip()):
+            return continuation[i:]
+    return continuation
 
 def stream_gemini_response(prompt, context, style="פשוט ומונגש"):
-    """הזרמת תשובה בזמן אמת מ-Gemini API (Fast Streaming) עם מעבר אוטומטי למודל גיבוי בעת עומס"""
+    """הזרמת תשובה בזמן אמת מ-Gemini API (Fast Streaming) עם מעבר אוטומטי למודל גיבוי בעת עומס והשלמה אוטומטית במקרה של קטיעה (Auto-Continuation)"""
     # אם המשתמש הזכיר במפורש בבקשה "הכנה למבחני רבנות" או "רבנות" - נחיל סגנון זה
     if any(keyword in prompt for keyword in ["רבנות", "מבחני רבנות", "הכנה למבחני רבנות", "בחינות הרבנות"]):
         style = "הכנה למבחני רבנות"
@@ -1349,10 +1358,56 @@ def stream_gemini_response(prompt, context, style="פשוט ומונגש"):
             )
             response = model.generate_content(full_prompt, stream=True)
             has_yielded = False
+            accumulated_chunks = []
+            finish_reason = None
+
             for chunk in response:
-                if chunk.text:
-                    yield chunk.text
-                    has_yielded = True
+                if chunk.candidates:
+                    finish_reason = getattr(chunk.candidates[0], 'finish_reason', None)
+                try:
+                    if chunk.text:
+                        accumulated_chunks.append(chunk.text)
+                        yield chunk.text
+                        has_yielded = True
+                except Exception:
+                    pass
+
+            # מניעת קטיעה: אם התשובה נקטעה בגלל הגעה לתקרת האסימונים (MAX_TOKENS = 2), נמשיך אותה אוטומטית עד להשלמתה המלאה
+            continuation_cycles = 0
+            while str(finish_reason) in ("2", "FinishReason.MAX_TOKENS") and continuation_cycles < 3:
+                continuation_cycles += 1
+                current_text = "".join(accumulated_chunks)
+                last_anchor = current_text[-250:]
+                cont_prompt = (
+                    f"{full_prompt}\n\n"
+                    f"[הנחיה חיונית למערכת: התשובה שיוצרה נקטעה באמצע בגלל מגבלת אורך אסימונים בדיוק במילים: \"{last_anchor}\".\n"
+                    f"עליך להמשיך מיד ובאופן רציף מאותה נקודה בדיוק, מבלי לחזור על שום מילה שנכתבה כבר, "
+                    f"ולהשלים את שאר הסעיפים, ההלכה למעשה (לפי מנהגי העדות) ואת הערת הסיום כנדרש.]"
+                )
+                try:
+                    cont_response = model.generate_content(cont_prompt, stream=True)
+                    finish_reason = None
+                    round_chunks = []
+                    for c in cont_response:
+                        if c.candidates:
+                            finish_reason = getattr(c.candidates[0], 'finish_reason', None)
+                        try:
+                            if c.text:
+                                round_chunks.append(c.text)
+                        except Exception:
+                            pass
+                    
+                    if round_chunks:
+                        full_round = "".join(round_chunks)
+                        cleaned_round = stitch_continuation(current_text, full_round)
+                        if cleaned_round:
+                            accumulated_chunks.append(cleaned_round)
+                            yield cleaned_round
+                    else:
+                        break
+                except Exception:
+                    break
+
             if has_yielded:
                 return
         except Exception as e:
@@ -1411,10 +1466,32 @@ def analyze_sugya(messages, style_mode="פשוט ומונגש", use_sefaria=None
         user_prompt = str(messages)
         chat_history = None
 
+    # תמיכה חכמה בבקשות המשך ("המשך", "תמשיך", "התשובה נקטעה")
+    is_continuation_request = False
+    prior_sources = []
+    if chat_history and len(chat_history) >= 2:
+        prompt_strip = user_prompt.strip()
+        continuation_keywords = ["המשך", "תמשיך", "הפסיקה באמצע", "נקטעה", "תשלים", "השלם", "לא סיימת", "עצר באמצע"]
+        if any(kw in prompt_strip for kw in continuation_keywords) and len(prompt_strip) < 100:
+            is_continuation_request = True
+            for m in reversed(chat_history[:-1]):
+                if isinstance(m, dict) and m.get("role") == "assistant":
+                    last_content = m.get("content", "")
+                    prior_sources = m.get("sources", [])
+                    tail_anchor = last_content[-350:] if len(last_content) > 350 else last_content
+                    user_prompt = (
+                        f"התשובה הקודמת נקטעה בנקודה זו:\n\"{tail_anchor}\"\n\n"
+                        f"המשך מיד ובאופן ישיר מאותה נקודה בדיוק ברצף טבעי, אל תחזור על מילים שנכתבו, "
+                        f"והשלם את שאר הסעיפים, הלכה למעשה (אשכנז, ספרד, תימן) והערת הסיום כנדרש."
+                    )
+                    break
+
     should_use_sefaria = use_sefaria if use_sefaria is not None else globals().get("use_sefaria", True)
     
     sources = []
-    if should_use_sefaria:
+    if is_continuation_request and prior_sources:
+        sources = prior_sources
+    elif should_use_sefaria:
         try:
             sources = search_sefaria_and_local(user_prompt, history=chat_history, max_results=10)
         except Exception:
