@@ -306,13 +306,11 @@ def fetch_sefaria_text_by_ref(ref_str: str) -> str:
         res = HTTP_SESSION.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
-            # חילוץ גרסאות עבריות
             versions = data.get("versions", [])
             for v in versions:
                 if v.get("language") == "he":
                     text = v.get("text", "")
                     if isinstance(text, list):
-                        # שיטוח מערך מקונן עבור מספר פסוקים/משניות
                         flat = []
                         def flatten(l):
                             for item in l:
@@ -348,56 +346,96 @@ def fetch_sefaria_text_by_ref(ref_str: str) -> str:
 fetch_single_ref_text = fetch_sefaria_text_by_ref
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_sources(query: str) -> List[str]:
-    """Step 1: Robust fallback search using Sefaria Search API."""
-    contexts = []
-    clean_query = re.sub(r'[^\w\s]', '', query).strip()
-    if not clean_query:
-        return []
+def get_sefaria_sources_robust(user_query: str) -> List[str]:
+    """
+    Fetches raw Hebrew sources from Sefaria API with automatic URL encoding
+    and multi-stage fallback.
+    """
+    retrieved_texts = []
+    raw_query = user_query.strip()
+    clean_query = re.sub(r'[^\w\s]', '', user_query).strip()
     
-    # 1. Try Direct Text Fetch (if query is a known Ref like 'Oholot 7:6' or 'Sanhedrin 72b')
-    direct_text = fetch_sefaria_text_by_ref(clean_query)
-    if direct_text:
-        return [f"[{clean_query}]\n{direct_text}"]
-        
-    # 2. Fallback to Sefaria Global Search API
+    if not clean_query and not raw_query:
+        return retrieved_texts
+
+    # 1. Encode Hebrew string for safe HTTP requests (keeping ref punctuation like : or .)
+    target_ref = raw_query if any(c in raw_query for c in [':', '.']) else clean_query
+    encoded_query = urllib.parse.quote(target_ref)
+    
+    # 2. Stage 1: Try Sefaria Text Search API (Global Search)
+    search_url = "https://www.sefaria.org/api/search-wrapper"
+    payload = {
+        "query": clean_query,
+        "type": "text",
+        "size": 5,
+        "field": "naive_lemmatizer"
+    }
+    
+    headers = {"Content-Type": "application/json"}
+
     try:
-        search_url = "https://www.sefaria.org/api/search-wrapper"
-        payload = {
-            "query": clean_query,
-            "type": "text",
-            "size": 5,
-            "field": "naive_lemmatizer"
-        }
-        res = HTTP_SESSION.post(search_url, json=payload, timeout=5)
-        if res.status_code == 200:
-            hits = res.json().get("hits", {}).get("hits", [])
+        response = HTTP_SESSION.post(search_url, json=payload, headers=headers, timeout=6)
+        if response.status_code == 200:
+            hits = response.json().get("hits", {}).get("hits", [])
             for hit in hits:
-                # חילוץ מזהה מדויק מתוך _source או _id
-                ref = hit.get("_source", {}).get("ref")
+                source_data = hit.get("_source") or {}
+                ref = source_data.get("ref")
+                # חילוץ Ref מתוך _id במידה ושדה ref חסר ב-_source
                 if not ref and hit.get("_id"):
                     raw_id = hit.get("_id", "")
                     m = re.match(r'^([^(]+)', raw_id)
                     ref = m.group(1).strip() if m else raw_id
-
-                if ref:
-                    text = fetch_sefaria_text_by_ref(ref)
-                    if text and not any(c.startswith(f"[{ref}]") for c in contexts):
-                        contexts.append(f"[{ref}]\n{text}")
-                    if len(contexts) >= 5:
-                        break
+                
+                he_text = source_data.get("he", "")
+                # שליפת הטקסט המלא אם אינו קיים בתוצאת החיפוש הישירה
+                if not he_text and ref:
+                    he_text = fetch_sefaria_text_by_ref(ref)
+                if not he_text and hit.get("highlight"):
+                    hl = hit.get("highlight", {})
+                    hl_snippets = []
+                    for v in hl.values():
+                        if isinstance(v, list):
+                            hl_snippets.extend(v)
+                    he_text = " ... ".join(hl_snippets)
+                
+                # Strip HTML tags if present
+                clean_he = re.sub(r'<[^>]+>', '', str(he_text)).strip()
+                if clean_he and ref and not any(c.startswith(f"[{ref}]") for c in retrieved_texts):
+                    retrieved_texts.append(f"[{ref}]\n{clean_he}")
     except Exception as e:
-        print(f"Search API error: {e}")
+        print(f"Sefaria Search API Error: {e}")
 
-    return contexts
+    # 3. Stage 2: Fallback to Direct Ref Fetch if Search returned empty
+    if not retrieved_texts:
+        try:
+            # Try direct text fetch if query matches a known book/ref
+            direct_url = f"https://www.sefaria.org/api/v3/texts/{encoded_query}?context=0"
+            res = HTTP_SESSION.get(direct_url, timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                versions = data.get("versions", [])
+                for v in versions:
+                    if v.get("language") == "he":
+                        t = v.get("text", "")
+                        text_str = " ".join(t) if isinstance(t, list) else str(t)
+                        clean_t = re.sub(r'<[^>]+>', '', text_str).strip()
+                        if clean_t:
+                            retrieved_texts.append(f"[{user_query}]\n{clean_t}")
+                            break
+        except Exception as e:
+            print(f"Sefaria Direct Fetch Error: {e}")
+
+    return retrieved_texts
+
+search_sefaria_sources = get_sefaria_sources_robust
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def search_sefaria_fast(query: str, max_results: int = 5):
     """
-    שליפה מובנית מספריא באמצעות ארכיטקטורת החיפוש הדו-שלבית (Two-Step Search Architecture)
+    שליפה מובנית מספריא באמצעות מנוע השליפה המשופר (get_sefaria_sources_robust)
     ומחזירה רשימת אובייקטים מובנים עבור ממשק המשתמש ושכבת האימות.
     """
-    raw_contexts = search_sefaria_sources(query)
+    raw_contexts = get_sefaria_sources_robust(query)
     results = []
     for item in raw_contexts[:max_results]:
         lines = item.split("\n", 1)
