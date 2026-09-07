@@ -292,8 +292,9 @@ def remove_cantillation_and_niqqud(text):
     cleaned = re.sub(r'[\"״״”"\'׳]', '', cleaned)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def fetch_single_ref_text(ref_name, timeout=2.0):
-    """שליפת קטע טקסט בודד מספריא לפי Ref עם Timeout מוגדר"""
+    """שליפת קטע טקסט בודד מספריא לפי Ref עם Timeout מוגדר ומטמון ל-24 שעות"""
     try:
         url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(ref_name)}?context=0"
         res = HTTP_SESSION.get(url, timeout=timeout)
@@ -307,9 +308,9 @@ def fetch_single_ref_text(ref_name, timeout=2.0):
         pass
     return None
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def search_sefaria_fast(query, max_results=5):
-    """שליפה מקבילית מואצת ביותר מספריא - הרצת Ref ו-Search בו-זמנית עם חיסכון מרבי ב-Latency"""
+    """שליפה מקבילית מואצת ביותר מספריא - הרצת Ref ו-Search בו-זמנית עם שמירת מטמון ל-24 שעות"""
     results = []
     
     with ThreadPoolExecutor(max_workers=6) as executor:
@@ -385,8 +386,9 @@ def search_sefaria_fast(query, max_results=5):
                         
     return results[:max_results]
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def search_sefaria_and_local(query, max_results=5):
-    """שילוב מיידי של מקורות מקומיים (0ms) עם תוצאות ספריא המואצות"""
+    """שילוב מיידי של מקורות מקומיים (0ms) עם תוצאות ספריא המואצות עם שמירת מטמון מקומי ל-24 שעות"""
     sources = []
     
     # 1. חיפוש מיידי במאגר מקומי (Latency אפסי)
