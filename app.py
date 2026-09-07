@@ -392,6 +392,49 @@ HEBREW_TANAKH = [
 ]
 
 CONCEPTUAL_EXPANSIONS = {
+    "תפילין": {
+        "refs": [
+            "Shulchan Arukh, Orach Chayim 30:2",
+            "Shulchan Arukh, Orach Chayim 37:2",
+            "Shulchan Arukh, Orach Chayim 38:10",
+            "Menachot 36a",
+            "Eruvin 96a",
+            "Mishneh Torah, Tefillin, Mezuzah and the Priestly Blessing 4:10"
+        ],
+        "queries": ["הנחת תפילין", "זמן הנחת תפילין", "תפילין כל היום", "ברכת תפילין", "שקיעת החמה"]
+    },
+    "מוקצה": {
+        "refs": [
+            "Shabbat 123b",
+            "Shabbat 124a",
+            "Shabbat 142a",
+            "Shulchan Arukh, Orach Chayim 308:3",
+            "Mishneh Torah, Sabbath 25:1"
+        ],
+        "queries": ["טלטול מוקצה", "לצורך גופו ומקומו", "כלי שמלאכתו לאיסור", "דבר שמלאכתו להיתר"]
+    },
+    "בישול בשבת": {
+        "refs": [
+            "Shabbat 18b",
+            "Shabbat 36b",
+            "Shabbat 38a",
+            "Shulchan Arukh, Orach Chayim 253:1",
+            "Shulchan Arukh, Orach Chayim 318:1",
+            "Mishneh Torah, Sabbath 3:1"
+        ],
+        "queries": ["חימום אוכל בשבת", "שהייה והחזרה", "פלטה של שבת", "בישול אחר בישול"]
+    },
+    "בשר בחלב": {
+        "refs": [
+            "Chullin 103b",
+            "Chullin 104b",
+            "Chullin 105a",
+            "Shulchan Arukh, Yoreh De'ah 87:1",
+            "Shulchan Arukh, Yoreh De'ah 89:1",
+            "Mishneh Torah, Forbidden Foods 9:1"
+        ],
+        "queries": ["המתנה בין בשר לחלב", "בשר עוף בחלב", "אכילת גבינה אחר בשר"]
+    },
     "שעות זמניות": {
         "refs": [
             "Pesachim 93b",
@@ -419,14 +462,17 @@ CONCEPTUAL_EXPANSIONS = {
         "queries": ["זמני היום", "עלות השחר", "הנץ החמה", "שקיעת החמה", "צאת הכוכבים"]
     },
     "אין דוחין נפש מפני נפש": {
+        "aliases": ["סומק טפי", "דדמא דידך", "מאי חזית", "מי יימר", "נפש מפני נפש", "ההוא דאתא לקמיה דרבא"],
         "refs": [
+            "Sanhedrin 74a",
+            "Yoma 82b",
+            "Pesachim 25b",
             "Mishnah Oholot 7:6",
             "Sanhedrin 72b",
-            "Sanhedrin 74a",
             "Mishneh Torah, Murderer and the Preservation of Life 1:9",
             "Shulchan Arukh, Choshen Mishpat 425:2"
         ],
-        "queries": ["נפש מפני נפש", "יצא ראשו אין נוגעין בו", "מאי חזית דדמא דידך סומק"]
+        "queries": ["נפש מפני נפש", "מאי חזית דדמא דידך סומק", "מי יימר דדמא דידך סומק טפי", "יצא ראשו אין נוגעין בו", "ההוא דאתא לקמיה דרבא", "סומק טפי"]
     },
     "פיקוח נפש": {
         "refs": [
@@ -574,7 +620,56 @@ CONCEPTUAL_EXPANSIONS = {
             "Mishneh Torah, Sabbath 29:1",
             "Shulchan Arukh, Orach Chayim 296:1"
         ],
-        "queries": ["הבדלה על הכוס", "זכרהו על היין"]
+        "queries": ["הבדלה על הכוס", "זכרהו על היין", "מוצאי שבת"]
+    },
+    "תפילת מנחה": {
+        "refs": [
+            "Berakhot 26b",
+            "Berakhot 27a",
+            "Shulchan Arukh, Orach Chayim 233:1",
+            "Mishneh Torah, Prayer and the Priestly Blessing 3:1"
+        ],
+        "queries": ["זמן תפילת מנחה", "מנחה גדולה", "מנחה קטנה", "פלג המנחה", "תפילת מנחה עד שקיעת החמה"]
+    },
+    "קריאת שמע": {
+        "refs": [
+            "Berakhot 2a",
+            "Berakhot 9b",
+            "Berakhot 10b",
+            "Shulchan Arukh, Orach Chayim 58:1",
+            "Mishneh Torah, Reading the Shema 1:1"
+        ],
+        "queries": ["זמן קריאת שמע", "שמע של שחרית", "שלוש שעות", "הנץ החמה"]
+    },
+    "הדלקת נרות שבת": {
+        "refs": [
+            "Shabbat 25b",
+            "Shabbat 35b",
+            "Shulchan Arukh, Orach Chayim 261:1",
+            "Shulchan Arukh, Orach Chayim 263:1",
+            "Mishneh Torah, Sabbath 5:1"
+        ],
+        "queries": ["זמן הדלקת נרות שבת", "תוספת שבת", "בין השמשות", "ברכת הדלקת הנר"]
+    },
+    "ציצית": {
+        "refs": [
+            "Menachot 39b",
+            "Menachot 41a",
+            "Shulchan Arukh, Orach Chayim 8:1",
+            "Shulchan Arukh, Orach Chayim 11:1",
+            "Mishneh Torah, Fringes 1:1"
+        ],
+        "queries": ["הטלת ציצית", "טלית קטן", "ארבע כנפות", "ברכת הציצית"]
+    },
+    "עירובין": {
+        "refs": [
+            "Eruvin 2a",
+            "Eruvin 59a",
+            "Shulchan Arukh, Orach Chayim 345:1",
+            "Shulchan Arukh, Orach Chayim 366:1",
+            "Mishneh Torah, Eruv 1:1"
+        ],
+        "queries": ["עירוב חצרות", "טלטול בשבת", "רשות הרבים", "כרמלית"]
     }
 }
 
@@ -680,29 +775,94 @@ def classify_source_priority(ref_str: str) -> int:
 
     return 5
 
+# מילוני עזר לזיקוק שאילתות הלכתיות והתאמת מושגים מדויקת
+HALAKHIC_STOPWORDS = {
+    'האם', 'מותר', 'אסור', 'אפשר', 'מהו', 'מהי', 'מה', 'מי', 'למה', 'מדוע', 'כיצד', 'איך',
+    'הוא', 'היא', 'הם', 'הן', 'אשר', 'על', 'אל', 'את', 'זה', 'זו', 'אלה', 'אלו',
+    'של', 'עם', 'כל', 'כך', 'רק', 'אם', 'או', 'כמו', 'שעה', 'הזה', 'הזאת', 'היו',
+    'היה', 'תהיה', 'יהיה', 'ב2', 'ב3', 'ב4', 'ב12', 'בצהריים', 'בבוקר', 'בערב', 'בלילה',
+    'אומרים', 'עושים', 'כשמניחים', 'שעושים', 'שאומרים', 'כזו', 'כזה', 'מאוחרת', 'מוקדמת',
+    'המשפט', 'טוב', 'תודה', 'בבקשה', 'שלום', 'היי', 'אשמח', 'לדעת', 'להבין',
+    'לשאול', 'שאלה', 'לגבי', 'בעניין', 'הלכה', 'למעשה', 'דין', 'הדין'
+}
+
+AMORA_OR_COMMON_WORDS = {
+    'רבה', 'רבא', 'אביי', 'רב', 'שמואל', 'רבי', 'יוחנן', 'ריש לקיש', 'רב אשי', 'רבינא',
+    'משפט', 'המשפט', 'פסוק', 'פסוקים', 'אמר', 'אמרו', 'שאמר', 'שאמרו', 'מימרא',
+    'הלכה', 'דין', 'סברא', 'טפי', 'הזה', 'הזאת', 'ההוא', 'מאי'
+}
+
+MORPHOLOGY_MAP = {
+    'להניח': ['הנחת', 'מניח', 'תפילין'],
+    'לטלטל': ['טלטול', 'מוקצה'],
+    'לחמם': ['חימום', 'בישול'],
+    'לבשל': ['בישול', 'שבת'],
+    'לאכול': ['אכילה'],
+    'לברך': ['ברכת'],
+    'לטבול': ['טבילת']
+}
+
 @st.cache_data(ttl=86400, show_spinner=False)
-def get_sefaria_sources_robust(user_query: str) -> List[str]:
+def get_sefaria_sources_robust(user_query: str, history=None) -> List[str]:
     """
     שליפת מקורות מספריא בעדיפות עליונה לקטגוריות ראשיות (תנ"ך, משנה, תלמוד, רמב"ם ושולחן ערוך)
-    לפני פרשנים ואחרונים, כולל הרחבת שאילתות למושגים הלכתיים (Query Expansion),
+    לפני פרשנים ואחרונים, כולל זיקוק שאילתה הלכתי, התחשבות בהקשר שיחה, הרחבת מושגים,
     שליפה מקבילית מסוננת לפי קטגוריות, ומראי מקומות בעברית בלבד.
     """
     raw_query = user_query.strip()
-    clean_query = re.sub(r'[^\w\s]', '', user_query).strip()
+    clean_query = re.sub(r'[^\w\s]', ' ', user_query).strip()
     if not clean_query and not raw_query:
         return []
 
     collected_sources = []
     seen_refs = set()
 
-    # 1. הרחבת שאילתה (Query Expansion) למושגים תורניים והלכתיים
+    raw_words = clean_query.split()
+    content_words = [w for w in raw_words if w not in HALAKHIC_STOPWORDS and len(w) > 1]
+
+    # תמיכה בשאלות המשך שיחתיות: שילוב מילות תוכן מהודעות קודמות בשיחה
+    combined_context_text = user_query
+    if history and isinstance(history, list):
+        for prev_msg in reversed(history):
+            if isinstance(prev_msg, dict) and prev_msg.get("role") == "user":
+                prev_text = prev_msg.get("content", "")
+                if prev_text.strip() == user_query.strip():
+                    continue  # דילוג על השאלה הנוכחית כדי לאתר את השאלה הקודמת
+                combined_context_text += " " + prev_text
+                prev_clean = re.sub(r'[^\w\s]', ' ', prev_text)
+                prev_content = [w for w in prev_clean.split() if w not in HALAKHIC_STOPWORDS and len(w) > 1]
+                if len(content_words) <= 2:
+                    content_words = prev_content[:3] + content_words
+                break
+
+    # 1. הרחבת שאילתה (Query Expansion) למושגים תורניים והלכתיים עם התאמה מדויקת
     expanded_refs = []
     expanded_queries = []
     for concept, data in CONCEPTUAL_EXPANSIONS.items():
-        if concept in user_query or user_query in concept:
+        matched = False
+        if concept in combined_context_text:
+            matched = True
+        if not matched:
+            for q in data.get("queries", []) + data.get("aliases", []):
+                if q in combined_context_text:
+                    matched = True
+                    break
+                q_words = [qw for qw in q.split() if qw not in HALAKHIC_STOPWORDS and qw not in AMORA_OR_COMMON_WORDS]
+                if len(q_words) >= 2 and all(qw in combined_context_text for qw in q_words):
+                    matched = True
+                    break
+        if not matched:
+            concept_words = [cw for cw in re.findall(r'\b\w+\b', concept) if cw not in AMORA_OR_COMMON_WORDS and len(cw) >= 4]
+            for cw in concept_words:
+                if cw in content_words:
+                    matched = True
+                    break
+
+        if matched:
             expanded_refs.extend(data.get("refs", []))
             expanded_queries.extend(data.get("queries", []))
-            break
+            if len(expanded_refs) >= 10:
+                break
 
     # שליפה ישירה ומקבילית של מראי מקומות מורחבים
     if expanded_refs:
@@ -729,17 +889,25 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
         ("Global", None)
     ]
 
-    # הכנת שאילתות להרצה: השאילתה המקורית, הרחבות מושגיות, ופירוק לביגרמות להבטחת שליפת הגמרא
-    words = [w for w in re.split(r'\s+', clean_query) if len(w) > 2]
+    # הכנת שאילתות מזוקקות להרצה: ביטויי מפתח, הטיות וביגרמות
     decomposed_subqueries = []
-    for i in range(len(words) - 1):
-        decomposed_subqueries.append(f"{words[i]} {words[i+1]}")
-    stopwords = {'האם', 'למה', 'מדוע', 'כיצד', 'הוא', 'היא', 'אשר', 'על', 'אל', 'את', 'זה', 'זו', 'של', 'עם', 'מהו', 'מהי'}
-    decomposed_subqueries.extend([w for w in words if w not in stopwords])
+    if content_words:
+        decomposed_subqueries.append(' '.join(content_words[:4]))
+        for i in range(len(content_words) - 1):
+            decomposed_subqueries.append(f"{content_words[i]} {content_words[i+1]}")
+    for rw in raw_words:
+        if rw in MORPHOLOGY_MAP:
+            for m in MORPHOLOGY_MAP[rw]:
+                if m not in decomposed_subqueries:
+                    decomposed_subqueries.append(m)
 
-    search_queries = [clean_query]
+    search_queries = []
+    if content_words:
+        search_queries.append(' '.join(content_words[:4]))
+    if clean_query not in search_queries and len(clean_query.split()) <= 4:
+        search_queries.append(clean_query)
     if expanded_queries:
-        search_queries.extend(expanded_queries[:2])
+        search_queries.extend(expanded_queries[:3])
     for dsq in decomposed_subqueries:
         if dsq not in search_queries:
             search_queries.append(dsq)
@@ -778,46 +946,39 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
         cat_hits_lists = executor.map(query_category, primary_categories)
         all_hits = [hit for sublist in cat_hits_lists for hit in sublist]
 
-    # עיבוד התוצאות מהקטגוריות השונות
+    # שליפה מקבילית ומואצת של טקסט מלא ומראי מקומות בעברית מתוך התוצאות
+    unique_hits_to_fetch = []
+    seen_candidate_refs = set()
     for hit in all_hits:
-        source_data = hit.get("_source") or {}
-        ref = source_data.get("ref")
-        if not ref and hit.get("_id"):
-            raw_id = hit.get("_id", "")
-            m = re.match(r'^([^(]+)', raw_id)
-            ref = m.group(1).strip() if m else raw_id
+        raw_id = hit.get("_id", "")
+        m = re.match(r'^([^(]+)', raw_id)
+        ref = m.group(1).strip() if m else raw_id
+        if ref and ref not in seen_candidate_refs:
+            seen_candidate_refs.add(ref)
+            unique_hits_to_fetch.append((ref, hit))
 
-        if not ref:
-            continue
-
-        he_ref = source_data.get("heRef", "")
-        he_text = source_data.get("he", "")
-
-        # שליפת טקסט עברי מלא ומראה מקום מדויק
-        if not he_text and ref:
-            t, hr = fetch_sefaria_text_and_he_ref(ref)
-            if t:
-                he_text = t
-            if hr:
-                he_ref = hr
-
-        display_ref = he_ref if he_ref else ref
-        if display_ref in seen_refs:
-            continue
-
-        if not he_text and hit.get("highlight"):
+    def fetch_hit_details(item):
+        ref, hit = item
+        t, hr = fetch_sefaria_text_and_he_ref(ref)
+        if not t and hit.get("highlight"):
             hl = hit.get("highlight", {})
             hl_snippets = []
             for v in hl.values():
                 if isinstance(v, list):
                     hl_snippets.extend(v)
-            he_text = " ... ".join(hl_snippets)
+            t = " ... ".join(hl_snippets)
+        return ref, hr, t
 
-        clean_he = clean_html_tags(str(he_text))
-        if clean_he:
-            seen_refs.add(display_ref)
-            prio = classify_source_priority(ref)
-            collected_sources.append((prio, display_ref, clean_he))
+    if unique_hits_to_fetch:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for ref, hr, t in executor.map(fetch_hit_details, unique_hits_to_fetch):
+                clean_he = clean_html_tags(str(t))
+                if clean_he:
+                    display_ref = hr if hr else ref
+                    if display_ref not in seen_refs:
+                        seen_refs.add(display_ref)
+                        prio = classify_source_priority(ref)
+                        collected_sources.append((prio, display_ref, clean_he))
 
     # 3. גיבוי: שליפה ישירה של השאילתה כ-Ref במידה ולא נשלפו מקורות
     if not collected_sources:
@@ -855,13 +1016,13 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
 search_sefaria_sources = get_sefaria_sources_robust
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_fast(query: str, max_results: int = 10):
+def search_sefaria_fast(query: str, history=None, max_results: int = 10):
     """
     שליפה מובנית מספריא באמצעות מנוע השליפה המשופר והמתועדף (get_sefaria_sources_robust)
     ומחזירה רשימת אובייקטים מובנים עבור ממשק המשתמש ושכבת האימות,
     כאשר מקורות ראשוניים (חז"ל, רמב"ם, שו"ע) מופיעים בראש.
     """
-    raw_contexts = get_sefaria_sources_robust(query)
+    raw_contexts = get_sefaria_sources_robust(query, history=history)
     results = []
     for item in raw_contexts[:max_results]:
         lines = item.split("\n", 1)
@@ -884,7 +1045,7 @@ def search_sefaria_fast(query: str, max_results: int = 10):
     return results
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_and_local(query, max_results=10):
+def search_sefaria_and_local(query, history=None, max_results=10):
     """שילוב מיידי של מקורות מקומיים עם תוצאות ספריא המתועדפות לפי קטגוריות ראשיות"""
     sources = []
     
@@ -914,7 +1075,7 @@ def search_sefaria_and_local(query, max_results=10):
 
     # 2. שליפה מספריא בעדיפות למקורות ראשוניים
     try:
-        sefaria_sources = search_sefaria_fast(query, max_results=max_results)
+        sefaria_sources = search_sefaria_fast(query, history=history, max_results=max_results)
         for s in sefaria_sources:
             if not any(existing["ref"] == s["ref"] for existing in sources):
                 sources.append(s)
@@ -1185,18 +1346,20 @@ def analyze_sugya(messages, style_mode="פשוט ומונגש", use_sefaria=None
     if isinstance(messages, list) and len(messages) > 0:
         last_msg = messages[-1]
         user_prompt = last_msg.get("content", "") if isinstance(last_msg, dict) else str(last_msg)
+        chat_history = messages
     else:
         user_prompt = str(messages)
+        chat_history = None
 
     should_use_sefaria = use_sefaria if use_sefaria is not None else globals().get("use_sefaria", True)
     
     sources = []
     if should_use_sefaria:
         try:
-            sources = search_sefaria_and_local(user_prompt, max_results=10)
+            sources = search_sefaria_and_local(user_prompt, history=chat_history, max_results=10)
         except Exception:
             try:
-                sources = search_sefaria_fast(user_prompt, max_results=10)
+                sources = search_sefaria_fast(user_prompt, history=chat_history, max_results=10)
             except Exception:
                 sources = []
 
