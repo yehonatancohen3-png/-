@@ -395,6 +395,9 @@ CONCEPTUAL_EXPANSIONS = {
     "תפילין": {
         "refs": [
             "Shulchan Arukh, Orach Chayim 30:2",
+            "Mishnah Berurah 30:2",
+            "Biur Halacha 30:2",
+            "Kaf HaChayim on Shulchan Arukh, Orach Chayim 30:2",
             "Shulchan Arukh, Orach Chayim 37:2",
             "Shulchan Arukh, Orach Chayim 38:10",
             "Menachot 36a",
@@ -409,6 +412,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Shabbat 124a",
             "Shabbat 142a",
             "Shulchan Arukh, Orach Chayim 308:3",
+            "Mishnah Berurah 308:3",
+            "Biur Halacha 308:3",
+            "Kaf HaChayim on Shulchan Arukh, Orach Chayim 308:3",
             "Mishneh Torah, Sabbath 25:1"
         ],
         "queries": ["טלטול מוקצה", "לצורך גופו ומקומו", "כלי שמלאכתו לאיסור", "דבר שמלאכתו להיתר"]
@@ -419,7 +425,10 @@ CONCEPTUAL_EXPANSIONS = {
             "Shabbat 36b",
             "Shabbat 38a",
             "Shulchan Arukh, Orach Chayim 253:1",
+            "Mishnah Berurah 253:1",
             "Shulchan Arukh, Orach Chayim 318:1",
+            "Mishnah Berurah 318:1",
+            "Biur Halacha 318:1",
             "Mishneh Torah, Sabbath 3:1"
         ],
         "queries": ["חימום אוכל בשבת", "שהייה והחזרה", "פלטה של שבת", "בישול אחר בישול"]
@@ -431,6 +440,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Chullin 105a",
             "Shulchan Arukh, Yoreh De'ah 87:1",
             "Shulchan Arukh, Yoreh De'ah 89:1",
+            "Siftei Kohen on Shulchan Arukh, Yoreh De'ah 89:1",
+            "Turei Zahav on Shulchan Arukh, Yoreh De'ah 89:1",
+            "Pithei Teshuva on Shulchan Arukh, Yoreh De'ah 89:1",
             "Mishneh Torah, Forbidden Foods 9:1"
         ],
         "queries": ["המתנה בין בשר לחלב", "בשר עוף בחלב", "אכילת גבינה אחר בשר"]
@@ -444,6 +456,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Mishnah Berakhot 1:2",
             "Mishnah Berakhot 4:1",
             "Shulchan Arukh, Orach Chayim 233:1",
+            "Mishnah Berurah 233:3",
+            "Biur Halacha 233:1",
+            "Mishnah Berurah 58:4",
             "Mishneh Torah, Reading the Shema 1:9",
             "Mishneh Torah, Prayer and the Priestly Blessing 3:1"
         ],
@@ -627,6 +642,8 @@ CONCEPTUAL_EXPANSIONS = {
             "Berakhot 26b",
             "Berakhot 27a",
             "Shulchan Arukh, Orach Chayim 233:1",
+            "Mishnah Berurah 233:1",
+            "Biur Halacha 233:1",
             "Mishneh Torah, Prayer and the Priestly Blessing 3:1"
         ],
         "queries": ["זמן תפילת מנחה", "מנחה גדולה", "מנחה קטנה", "פלג המנחה", "תפילת מנחה עד שקיעת החמה"]
@@ -637,6 +654,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Berakhot 9b",
             "Berakhot 10b",
             "Shulchan Arukh, Orach Chayim 58:1",
+            "Mishnah Berurah 58:1",
+            "Mishnah Berurah 58:4",
+            "Biur Halacha 58:1",
             "Mishneh Torah, Reading the Shema 1:1"
         ],
         "queries": ["זמן קריאת שמע", "שמע של שחרית", "שלוש שעות", "הנץ החמה"]
@@ -646,7 +666,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Shabbat 25b",
             "Shabbat 35b",
             "Shulchan Arukh, Orach Chayim 261:1",
+            "Mishnah Berurah 261:1",
             "Shulchan Arukh, Orach Chayim 263:1",
+            "Mishnah Berurah 263:1",
             "Mishneh Torah, Sabbath 5:1"
         ],
         "queries": ["זמן הדלקת נרות שבת", "תוספת שבת", "בין השמשות", "ברכת הדלקת הנר"]
@@ -656,7 +678,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Menachot 39b",
             "Menachot 41a",
             "Shulchan Arukh, Orach Chayim 8:1",
+            "Mishnah Berurah 8:1",
             "Shulchan Arukh, Orach Chayim 11:1",
+            "Mishnah Berurah 11:1",
             "Mishneh Torah, Fringes 1:1"
         ],
         "queries": ["הטלת ציצית", "טלית קטן", "ארבע כנפות", "ברכת הציצית"]
@@ -666,7 +690,9 @@ CONCEPTUAL_EXPANSIONS = {
             "Eruvin 2a",
             "Eruvin 59a",
             "Shulchan Arukh, Orach Chayim 345:1",
+            "Mishnah Berurah 345:1",
             "Shulchan Arukh, Orach Chayim 366:1",
+            "Mishnah Berurah 366:1",
             "Mishneh Torah, Eruv 1:1"
         ],
         "queries": ["עירוב חצרות", "טלטול בשבת", "רשות הרבים", "כרמלית"]
@@ -885,6 +911,8 @@ def get_sefaria_sources_robust(user_query: str, history=None) -> List[str]:
         ("Talmud/Bavli", ["Talmud/Bavli"]),
         ("Halakhah/Mishneh Torah", ["Halakhah/Mishneh Torah"]),
         ("Halakhah/Shulchan Arukh", ["Halakhah/Shulchan Arukh"]),
+        ("Acharonim/Commentary", ["Halakhah/Shulchan Arukh/Commentary"]),
+        ("Responsa", ["Responsa"]),
         ("Tanakh", ["Tanakh"]),
         ("Global", None)
     ]
@@ -915,8 +943,8 @@ def get_sefaria_sources_robust(user_query: str, history=None) -> List[str]:
     def query_category(cat_info):
         cat_name, cat_filter = cat_info
         results = []
-        # עבור תלמוד ומשנה סורקים את תת-השאילתות כדי להבטיח את מציאת סוגיית הגמרא בארמית/חז"ל
-        queries_to_run = search_queries[:5] if cat_name in ["Talmud/Bavli", "Mishnah"] else search_queries[:2]
+        # סריקת שאילתות מזוקקות להבטחת כיסוי גמרא, שו"ע, אחרונים ושו"תים
+        queries_to_run = search_queries[:5] if cat_name in ["Talmud/Bavli", "Mishnah", "Acharonim/Commentary", "Responsa"] else search_queries[:2]
         for q in queries_to_run:
             payload = {
                 "query": q,
@@ -942,7 +970,7 @@ def get_sefaria_sources_robust(user_query: str, history=None) -> List[str]:
                 break
         return results
 
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         cat_hits_lists = executor.map(query_category, primary_categories)
         all_hits = [hit for sublist in cat_hits_lists for hit in sublist]
 
@@ -1003,12 +1031,37 @@ def get_sefaria_sources_robust(user_query: str, history=None) -> List[str]:
         except Exception:
             pass
 
-    # 4. הרכבת הקונטקסט לפי סדר עדיפויות קפדני (Prioritized Context Assembly)
-    # מקורות ראשוניים (תנ"ך, משנה, תלמוד - 1, רמב"ם ושולחן ערוך - 2) מופיעים תמיד בראש הרשימה!
-    collected_sources.sort(key=lambda item: item[0])
+    # 4. הרכבת הקונטקסט בצורה מאוזנת המבטיחה מקורות בכל דרגי הפסיקה (כולל אחרונים ושו"תים)
+    by_prio = {1: [], 2: [], 3: [], 4: [], 5: []}
+    for s in collected_sources:
+        prio = s[0]
+        if prio in by_prio:
+            by_prio[prio].append(s)
+        else:
+            by_prio[5].append(s)
+
+    balanced_sources = []
+    # מנות מובטחות: גמרא ומשנה (3), ראשונים (2), שו"ע ורמב"ם (3), אחרונים ונושאי כלים (4), שו"תים (2)
+    tier_quotas = {1: 3, 3: 2, 2: 3, 4: 4, 5: 2}
+    for prio in [1, 3, 2, 4, 5]:
+        take = min(len(by_prio[prio]), tier_quotas[prio])
+        balanced_sources.extend(by_prio[prio][:take])
+        by_prio[prio] = by_prio[prio][take:]
+
+    # השלמת מקומות עד 16 מקורות מתוך כלל המקורות שנותרו
+    remaining_slots = 16 - len(balanced_sources)
+    if remaining_slots > 0:
+        leftover = []
+        for prio in [1, 3, 2, 4, 5]:
+            leftover.extend(by_prio[prio])
+        balanced_sources.extend(leftover[:remaining_slots])
+
+    # סידור במסלול פסיקה קנוני: גמרא (1) -> ראשונים (3) -> שו"ע (2) -> אחרונים (4) -> שו"תים (5)
+    canonical_order = {1: 1, 3: 2, 2: 3, 4: 4, 5: 5}
+    balanced_sources.sort(key=lambda item: canonical_order.get(item[0], 6))
 
     retrieved_texts = []
-    for prio, disp_ref, text in collected_sources:
+    for prio, disp_ref, text in balanced_sources:
         retrieved_texts.append(f"[{disp_ref}]\n{text}")
 
     return retrieved_texts
@@ -1016,7 +1069,7 @@ def get_sefaria_sources_robust(user_query: str, history=None) -> List[str]:
 search_sefaria_sources = get_sefaria_sources_robust
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_fast(query: str, history=None, max_results: int = 10):
+def search_sefaria_fast(query: str, history=None, max_results: int = 14):
     """
     שליפה מובנית מספריא באמצעות מנוע השליפה המשופר והמתועדף (get_sefaria_sources_robust)
     ומחזירה רשימת אובייקטים מובנים עבור ממשק המשתמש ושכבת האימות,
@@ -1045,7 +1098,7 @@ def search_sefaria_fast(query: str, history=None, max_results: int = 10):
     return results
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_and_local(query, history=None, max_results=10):
+def search_sefaria_and_local(query, history=None, max_results=14):
     """שילוב מיידי של מקורות מקומיים עם תוצאות ספריא המתועדפות לפי קטגוריות ראשיות"""
     sources = []
     
@@ -1073,7 +1126,7 @@ def search_sefaria_and_local(query, history=None, max_results=10):
         except Exception:
             pass
 
-    # 2. שליפה מספריא בעדיפות למקורות ראשוניים
+    # 2. שליפה מספריא בעדיפות למקורות ראשוניים, אחרונים ושו"תים
     try:
         sefaria_sources = search_sefaria_fast(query, history=history, max_results=max_results)
         for s in sefaria_sources:
@@ -1084,8 +1137,9 @@ def search_sefaria_and_local(query, history=None, max_results=10):
     except Exception:
         pass
 
-    # הבטחת סדר עדיפויות מוחלט: מקורות ראשוניים תמיד בראש
-    sources.sort(key=lambda s: s.get("priority", 5))
+    # סידור במסלול פסיקה קנוני: גמרא (1) -> ראשונים (3) -> שו"ע (2) -> אחרונים (4) -> שו"תים (5)
+    canonical_order = {1: 1, 3: 2, 2: 3, 4: 4, 5: 5}
+    sources.sort(key=lambda s: canonical_order.get(s.get("priority", 5), 6))
     return sources[:max_results]
 
 def format_context_sources(sources):
@@ -1112,9 +1166,13 @@ SYSTEM_PROMPT = """אתה עוזר מחקר תורני, הלכתי ולמדני.
 5. אחרונים (נושאי כלי השו"ע, שו"תים, וגדולי האחרונים)
 6. הלכה למעשה (חובה לפרט לפי מנהגי ופסיקות עדות: אשכנז, ספרד, ותימן)
 
-חוקי ברזל לציטוטים, מקורות ואמת תורנית:
-- איסור מוחלט על המצאת מקורות (Zero Hallucination): חל איסור חמור ומפורש להמציא מראי מקומות, מסכתות, דפים, סימנים בשו"ע, סעיפים, שו"תים או ציטוטים שאינם אמיתיים! אם אינך בטוח ב-100% במראה המקום או שהטקסט לא מופיע במקורות שנשלפו, כתוב את העיקרון ההלכתי בלשונך וציין במפורש: "מראה המקום המדויק אינו לפנינו במאגר כעת".
-- דיוק מילולי מוחלט (Verbatim): כל ציטוט במרכאות חייב להיות מועתק אות-באות מתוך המקורות שנשלפו בפועל מהמאגר. אין לשים במרכאות שום ציטוט שלא נשלף.
+חוקי ברזל למקורות באחרונים, ציטוטים ואמת תורנית:
+- חובת הבאת מראי מקומות מדויקים באחרונים:
+  בסעיף 5 ('אחרונים') ובסעיף 6 ('הלכה למעשה'), חובה מוחלטת לציין מראי מקומות מדויקים ומפורשים מגדולי האחרונים (משנה ברורה עם ציון סימן וסעיף קטן, ביאור הלכה, כף החיים, מגן אברהם, ט"ז, ש"ך, פתחי תשובה, ערוך השולחן, חזון איש, שו"ת יביע אומר, שו"ת אגרות משה, שו"ת ציץ אליעזר, שו"ת מנחת יצחק, ילקוט יוסף וכו').
+  * אם המקור נשלף מהמאגר (מופיע ב-Context): צטט מתוכו ישירות במרכאות בדיוק מילולי מוחלט (Verbatim).
+  * אם המקור באחרונים לא נשלף במלואו כציטוט ב-Context: אין להסתפק באמירה כללית, אלא חובה לציין את מראה המקום המדויק (שם הספר, חלק, סימן, סעיף קטן או סימן בשו"ת) ולבאר את שיטתו ופסיקתו בלשון תורנית מדויקת. לעולם אין להשאיר את סעיף האחרונים ללא מראי מקומות מפורשים!
+- איסור מוחלט על המצאת מקורות (Zero Hallucination): כל ספר, סימן או שו"ת שמובא חייב להיות אמיתי וקיים בארון הספרים היהודי. חל איסור מוחלט להמציא ספרים או סימנים בדיוניים.
+- דיוק מילולי מוחלט (Verbatim): שימוש במרכאות שמור אך ורק לטקסטים שהועתקו אות-באות מתוך המקורות שנשלפו בפועל מהמאגר. אין לשים במרכאות שום ביאור או מראה מקום שלא נשלף במאגר.
 - אמת עובדתית ותורנית ללא משוא פנים (No Sycophancy): לעולם אל תסכים עם שגיאה עובדתית של המשתמש רק כדי לרצותו! אם המשתמש טועה בייחוס מימרא, שם אמורא או פסק (למשל: ייחוס דברי רבא לרבה וכדומה), העמד דברים על דיוקם בכבוד ובבהירות על פי המקורות האמיתיים של חז"ל.
 - עברית בלבד: כל מראי המקומות, שמות הספרים והמחברים חייבים להופיע בלשון הקודש/עברית בלבד (ללא שמות באנגלית).
 - חובת הבאת מקורות הש"ס: בסעיף 2 ('מקור בגמרא'), הבא תמיד את שם המסכת והדף האמיתי, וכאשר המקור נשלף מהמאגר - צטט מתוכו ישירות במרכאות."""
@@ -1125,6 +1183,7 @@ PROMPTS = {
 דגשי סגנון - פשוט ומונגש:
 * הצג את התשובה בדיוק לפי 6 השלבים ההיררכיים (פסוקים, גמרא, ראשונים, שו"ע ורמ"א, אחרונים, הלכה למעשה לעדות: אשכנז, ספרד ותימן) בשפה בהירה ומאירת עיניים.
 * באר את המושגים והסברות בגובה העיניים.
+* בסעיף 5 (אחרונים) ובסעיף 6 (הלכה למעשה) הבא תמיד מראי מקומות מדויקים (משנה ברורה סימן וס"ק, כף החיים, שו"תים וכו') עם הסבר בהיר.
 * ציטוטים מהמקורות שלב בתוך מרכאות בדיוק מילולי מוחלט (אות-באות מהמקורות שנשלפו) עם מראה מקום עברי בלבד.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
@@ -1133,6 +1192,7 @@ PROMPTS = {
 דגשי סגנון - סגנון שו"ת:
 * מבנה תשובה מובהק של שאלות ותשובות העוקב בדיוק אחר 6 השלבים ההיררכיים (פסוקים, מקור בגמרא, ראשונים, שו"ע ורמ"א, אחרונים, הלכה למעשה עם פירוט מנהגי העדות: אשכנז, ספרד ותימן).
 * לשון תורנית רהוטה ומנומקת היטב.
+* סעיף 5 (אחרונים) יכלול דיון מנומק עם מראי מקומות מדויקים מנושאי הכלים, המשנה ברורה וספרי השו"ת המרכזיים.
 * ציטוטים מהמקורות הבא בתוך מרכאות בדיוק מילולי מוחלט (Verbatim) עם מראי מקומות עבריים בלבד.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
@@ -1149,8 +1209,8 @@ PROMPTS = {
 4. טור ובית יוסף (הצגת דברי הטור ודיוני הבית יוסף המרכזיים בבירור יסודות המכלול)
 5. שו"ע ונושאי הכלים:
    - פסק השולחן ערוך והרמ"א
-   - הרחבה בנושאי הכלים המרכזיים: חלקת מחוקק, בית שמואל, פתחי תשובה (באבן העזר/חושן משפט) או ט"ז, מגן אברהם, משנה ברורה (באורח חיים)
-6. הלכה למעשה (סיכום השורה התחתונה לפסיקה, תוך חלוקה ברורה לפי מנהגי עדות: אשכנז, ספרד, ותימן)
+   - הרחבה בנושאי הכלים והאחרונים המרכזיים: משנה ברורה עם סימנים וסעיפים קטנים, ביאור הלכה, שער הציון, כף החיים, ערוך השולחן, ט"ז, מגן אברהם (באורח חיים); ש"ך, ט"ז, פתחי תשובה (ביורה דעה); חלקת מחוקק, בית שמואל (באבן העזר); קצות החושן, נתיבות המשפט (בחושן משפט).
+6. הלכה למעשה (סיכום השורה התחתונה לפסיקה, תוך חלוקה ברורה לפי מנהגי עדות: אשכנז, ספרד, ותימן, והבאת שו"תים כגון: יביע אומר, אגרות משה, ציץ אליעזר, ילקוט יוסף).
 
 חוקי איכות וציטוט:
 - הרחבה למדנית: הרחב ככל הניתן בביאור סברות הראשונים ונושאי הכלים של הרמב"ם והשו"ע - מודל זה מיועד לשינון וללימוד עיון לקראת מבחני רבנות.
@@ -1161,7 +1221,7 @@ PROMPTS = {
     "ישיבתי-למדני": f"""{SYSTEM_PROMPT}
 
 דגשי סגנון - ישיבתי-למדני:
-* פתח מהלך למדני מעמיק המובנה לפי 6 השלבים: פסוקים, בירור יסוד הגמרא, שיטות הראשונים, פסק השו"ע והרמ"א, חקירות האחרונים וראשי הישיבות, ומסקנת ההלכה למעשה לפי מנהגי העדות (אשכנז, ספרד ותימן).
+* פתח מהלך למדני מעמיק המובנה לפי 6 השלבים: פסוקים, בירור יסוד הגמרא, שיטות הראשונים, פסק השו"ע והרמ"א, חקירות האחרונים וראשי הישיבות (קצות החושן, נתיבות המשפט, ר' שמעון שקופ, ברכת שמואל, אגרות משה, חזון איש, יביע אומר עם מראי מקומות מדויקים), ומסקנת ההלכה למעשה לפי מנהגי העדות (אשכנז, ספרד ותימן).
 * קושיות, תירוצים, דיוקים וחילוקי סברות בעומק העיון.
 * ציטוטים מדויקים הבא בתוך מרכאות בדיוק מוחלט (אות-באות מתוך המקורות שנשלפו).
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
