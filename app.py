@@ -6,7 +6,7 @@ import re
 import time
 import uuid
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -268,11 +268,14 @@ if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
 
 # ==========================================
-# 4. מנוע RAG רב-מקורות ושליפה מדויקת (Sefaria & Local DB)
+# 4. מנוע RAG רב-מקורות מואץ ושליפה מקבילית (Optimized Fast Sefaria & Local DB)
 # ==========================================
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TorahResearchBot/2.0"
 }
+
+HTTP_SESSION = requests.Session()
+HTTP_SESSION.headers.update(HEADERS)
 
 def clean_html_tags(text):
     """מנקה תגיות HTML ורווחי סרק מהטקסט"""
@@ -289,11 +292,104 @@ def remove_cantillation_and_niqqud(text):
     cleaned = re.sub(r'[\"״״”"\'׳]', '', cleaned)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
+def fetch_single_ref_text(ref_name, timeout=2.0):
+    """שליפת קטע טקסט בודד מספריא לפי Ref עם Timeout מוגדר"""
+    try:
+        url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(ref_name)}?context=0"
+        res = HTTP_SESSION.get(url, timeout=timeout)
+        if res.status_code == 200:
+            raw_he = res.json().get("he")
+            if raw_he:
+                if isinstance(raw_he, list):
+                    return clean_html_tags(" ".join([str(x) for x in raw_he]))
+                return clean_html_tags(str(raw_he))
+    except Exception:
+        pass
+    return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def search_sefaria_fast(query, max_results=5):
+    """שליפה מקבילית מואצת ביותר מספריא - הרצת Ref ו-Search בו-זמנית עם חיסכון מרבי ב-Latency"""
+    results = []
+    
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # שליפה ישירה כ-Ref וחיפוש טקסטואלי במקביל
+        direct_url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(query.strip())}?context=0"
+        direct_future = executor.submit(lambda: HTTP_SESSION.get(direct_url, timeout=2.0))
+        
+        search_url = "https://www.sefaria.org/api/search-wrapper"
+        payload = {"query": query, "size": max_results}
+        search_future = executor.submit(lambda: HTTP_SESSION.post(search_url, json=payload, timeout=2.5))
+        
+        # 1. בדיקת תוצאת שליפה ישירה
+        try:
+            d_res = direct_future.result()
+            if d_res.status_code == 200:
+                d = d_res.json()
+                he_val = d.get("he")
+                if he_val:
+                    text_content = clean_html_tags(" ".join([str(x) for x in he_val])) if isinstance(he_val, list) else clean_html_tags(str(he_val))
+                    ref_name = d.get("ref", query)
+                    results.append({
+                        "ref": ref_name,
+                        "text": text_content,
+                        "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_name)}"
+                    })
+        except Exception:
+            pass
+            
+        # 2. עיבוד תוצאות חיפוש מ-search-wrapper
+        candidate_refs = []
+        try:
+            s_res = search_future.result()
+            if s_res.status_code == 200:
+                hits = s_res.json().get("hits", {}).get("hits", [])
+                for hit in hits:
+                    raw_id = hit.get("_id", "")
+                    ref_match = re.match(r'^([^(]+)', raw_id)
+                    clean_ref = ref_match.group(1).strip() if ref_match else raw_id
+                    
+                    if any(s["ref"] == clean_ref for s in results):
+                        continue
+                    
+                    # חילוץ highlight כגיבוי מהיר
+                    highlights = hit.get("highlight", {})
+                    hl_list = []
+                    for v in highlights.values():
+                        if isinstance(v, list):
+                            hl_list.extend(v)
+                    snippet = clean_html_tags(" ... ".join(hl_list))
+                    candidate_refs.append((clean_ref, snippet))
+        except Exception:
+            pass
+        
+        # שליפה מקבילית של כל הטקסטים המלאים בו-זמנית
+        if candidate_refs:
+            fetch_futures = {executor.submit(fetch_single_ref_text, ref): (ref, snip) for ref, snip in candidate_refs[:max_results]}
+            for fut in as_completed(fetch_futures):
+                ref, snip = fetch_futures[fut]
+                full_text = None
+                try:
+                    full_text = fut.result()
+                except Exception:
+                    pass
+                final_text = full_text if full_text else snip
+                if final_text and not any(s["ref"] == ref for s in results):
+                    results.append({
+                        "ref": ref,
+                        "text": final_text,
+                        "url": f"https://www.sefaria.org/{urllib.parse.quote(ref)}"
+                    })
+                    if len(results) >= max_results:
+                        break
+                        
+    return results[:max_results]
+
 def search_sefaria_and_local(query, max_results=5):
-    """שליפה היברידית של מקורות: מאגר מקומי מאומת, שליפת Ref ישירה, וחיפוש טקסטואלי רחב בספריא"""
+    """שילוב מיידי של מקורות מקומיים (0ms) עם תוצאות ספריא המואצות"""
     sources = []
     
-    # 1. בדיקת מאגר מקומי (data/torah_database.json)
+    # 1. חיפוש מיידי במאגר מקומי (Latency אפסי)
     db_path = os.path.join(DATA_DIR, "torah_database.json")
     if os.path.exists(db_path):
         try:
@@ -315,67 +411,14 @@ def search_sefaria_and_local(query, max_results=5):
         except Exception:
             pass
 
-    # 2. שליפת Ref ישיר מספריא (אם מדובר בציטוט מראה מקום מדויק)
+    # 2. שליפה מקבילית מספריא (ממוטבת במטמון)
     try:
-        direct_url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(query.strip())}?context=0"
-        res = requests.get(direct_url, headers=HEADERS, timeout=3)
-        if res.status_code == 200:
-            d = res.json()
-            he_val = d.get("he")
-            if he_val:
-                text_content = " ".join([clean_html_tags(x) for x in he_val]) if isinstance(he_val, list) else clean_html_tags(he_val)
-                ref_name = d.get("ref", query)
-                if not any(s["ref"] == ref_name for s in sources):
-                    sources.append({
-                        "ref": ref_name,
-                        "text": text_content,
-                        "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_name)}"
-                    })
-    except Exception:
-        pass
-
-    # 3. חיפוש טקסטואלי מלא בספריא דרך search-wrapper
-    try:
-        search_url = "https://www.sefaria.org/api/search-wrapper"
-        payload = {"query": query, "size": max_results}
-        res = requests.post(search_url, json=payload, headers=HEADERS, timeout=4)
-        if res.status_code == 200:
-            hits = res.json().get("hits", {}).get("hits", [])
-            for hit in hits:
-                raw_id = hit.get("_id", "")
-                ref_match = re.match(r'^([^(]+)', raw_id)
-                clean_ref = ref_match.group(1).strip() if ref_match else raw_id
-                
-                if any(s["ref"] == clean_ref for s in sources):
-                    continue
-                
-                full_text = ""
-                try:
-                    ref_res = requests.get(f"https://www.sefaria.org/api/texts/{urllib.parse.quote(clean_ref)}?context=0", headers=HEADERS, timeout=3)
-                    if ref_res.status_code == 200:
-                        raw_he = ref_res.json().get("he")
-                        if raw_he:
-                            full_text = " ".join([clean_html_tags(x) for x in raw_he]) if isinstance(raw_he, list) else clean_html_tags(raw_he)
-                except Exception:
-                    pass
-                
-                if not full_text:
-                    highlights = hit.get("highlight", {})
-                    hl_list = []
-                    for v in highlights.values():
-                        if isinstance(v, list):
-                            hl_list.extend(v)
-                    full_text = " ... ".join([clean_html_tags(h) for h in hl_list])
-
-                if full_text.strip():
-                    sources.append({
-                        "ref": clean_ref,
-                        "text": full_text.strip(),
-                        "url": f"https://www.sefaria.org/{urllib.parse.quote(clean_ref)}"
-                    })
-                
-                if len(sources) >= max_results:
-                    break
+        sefaria_sources = search_sefaria_fast(query, max_results=max_results)
+        for s in sefaria_sources:
+            if not any(existing["ref"] == s["ref"] for existing in sources):
+                sources.append(s)
+            if len(sources) >= max_results:
+                break
     except Exception:
         pass
 
@@ -392,47 +435,50 @@ def format_context_sources(sources):
     return "\n\n" + "\n\n---\n\n".join(formatted)
 
 # ==========================================
-# 5. הגדרת פרומפט המערכת המחייב (Strict Grounding & Zero Hallucinations)
+# 5. הגדרת פרומפט המערכת המחייב (חוקי ברזל לכל סגנונות התשובה)
 # ==========================================
 SYSTEM_PROMPT = """אתה עוזר מחקר תורני ואקדמי המתבסס אך ורק ובלעדית על המקורות שנשלפו עבורך בזמן אמת (Sefaria API / Google Search Tools).
 
-חוקי ברזל למניעת הזיות ודיוק ציטוטים:
-1. איסור מוחלט על ציטוט מהזיכרון: אסור לך לצטט, לשחזר או להשלים טקסטים תורניים/עובדתיים מהזיכרון הפנימי שלך. כל ציטוט חייב להגיע אך ורק מהמקור ששלפת כעת.
-2. דיוק מילולי מוחלט (Verbatim): ציטוט מתוך מקור חייב להיות מועתק אות-באות ומילה-במילה מתוך ה-Context המוזרק. אין לשנות, לקצר או לנסח מחדש טקסט מצוטט.
-3. ייחוס מקור מדויק: כל ציטוט חייב להופיע בתוך סוגריים או עם מראה מקום מדויק (כגון: [בבלי, ברכות ב ע"א] או קישור ישיר).
-4. חובת הודעה על היעדר מידע: אם הציטוט או המקור המבוקש איננו מופיע בתוצאות השליפה (Context), חובה עליך להשיב: "המידע המבוקש אינו מופיע במקורות שנשלפו" ולא לנסות להשלים מדעתך.
-5. הפרדה בין ציטוט לניתוח: יש ליצור הפרדה חדה בין ציטוט המקור (בשדתו המקורית) לבין הניתוח/הסבר. ההסבר חייב להתבסס רק על העובדות המוזכרות בציטוט."""
+חוקי ברזל לציטוטים ולמקורות (תקף לכל סגנונות התשובה):
+1. חובת ציטוט מדויק (Verbatim): בכל סגנון מענה, חובה להביא את הציטוטים מתוך המקורות שנשלפו בלבד, אות-באות ומילה-במילה.
+2. איסור מוחלט על ציטוט מהזיכרון: אסור לשחזר, להשלים או לנחש ציטוטים תורניים או עובדתיים מתוך הזיכרון הפנימי.
+3. ייחוס מקור מדויק: כל ציטוט חייב להיות מלווה במראה מקום מדויק בתוך סוגריים (לדוגמה: [בבלי, ברכות ב ע"א]).
+4. הודעה על חסר: אם הציטוט או המקור איננו מופיע במפורש במידע שנשלף, חובה להשיב: "המידע המבוקש אינו מופיע במקורות שנשלפו" ולא להמציא.
+5. הנגשה לפי הסגנון הנבחר: השינוי בין הסגנונות ("פשוט ומונגש", "שו"ת", "מבחני רבנות") יהיה אך ורק באופציות הביאור והניתוח - הציטוט עצמו חייב להישאר מדויק ומבוסס לחלוטין בכל המצבים."""
 
 PROMPTS = {
-    "מחקר תורני קפדני (מדויק ומבוסס מקורות)": f"""{SYSTEM_PROMPT}
-
-דגשים למבנה התשובה:
-* פתח בציטוט המקורות הרלוונטיים מתוך ה-Context בדיוק מילולי מוחלט (אות-באות).
-* לאחר מכן, הצג ניתוח וביאור המבוסס אך ורק על העובדות שנזכרו בציטוטים.
-* חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
-""",
     "פשוט ומונגש": f"""{SYSTEM_PROMPT}
 
-דגשים למבנה התשובה:
-* ענה בשפה פשוטה, מודרנית וברורה אך מבוססת אך ורק על המקורות שנשלפו.
-* צטט מילה-במילה מתוך ה-Context עם מראה מקום מדויק, ולאחר מכן הסבר את המושגים בפשטות.
+דגשי סגנון - פשוט ומונגש:
+* הציטוטים עצמם: חובה להביאם אות-באות ומילה-במילה מתוך ה-Context עם מראה מקום מדויק בסוגריים.
+* הביאור וההסבר: יונגשו בשפה פשוטה, מודרנית ובהירה, אך יתבססו אך ורק על העובדות שבציטוט.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
-    "ישיבתי-למדני (סגנון שו\"ת)": f"""{SYSTEM_PROMPT}
+    "סגנון שו\"ת": f"""{SYSTEM_PROMPT}
 
-דגשים למבנה התשובה:
-* השתמש בשפה תורנית למדנית ומעמיקה.
-* צטט שיטות מתוך ה-Context בלשונן המקורית המדויקת, וחלק את הניתוח לבירור הסוגיה, ביאור הציטוטים ונפקא מינה.
+דגשי סגנון - סגנון שו"ת:
+* מבנה תשובה מסורתי: שאלת הסוגיה, ציטוט המקורות המדויקים מילה-במילה (Verbatim) עם מראי מקומות בסוגריים, משא ומתן הלכתי ומסקנה עיונית המבוססת אך ורק על המקורות שנשלפו.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "הכנה למבחני רבנות": f"""{SYSTEM_PROMPT}
 
-דגשים למבנה התשובה:
-* סדר את הציטוטים והמקורות שנשלפו בהשתלשלות הלכתית מובנית (ש"ס, ראשונים, שולחן ערוך ונושאי כלים).
-* הקפד על ציטוט מילולי מוחלט וייחוס מדויק של כל מקור בסוגריים.
+דגשי סגנון - הכנה למבחני רבנות:
+* הצג השתלשלות הלכתית מובנית (סוגיית הש"ס, ראשונים, שולחן ערוך ונושאי כלים) כפי שמופיעים במקורות שנשלפו בלבד.
+* חובת ציטוט מילולי מוחלט אות-באות וייחוס מדויק של כל מקור בסוגריים.
+* חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
+""",
+    "ישיבתי-למדני": f"""{SYSTEM_PROMPT}
+
+דגשי סגנון - ישיבתי-למדני:
+* העמק בניתוח הלמדני (דיוקי לשון, קושיות, תירוצים ונפקא מינה) על בסיס הציטוטים שנשלפו בלבד.
+* הציטוטים עצמם מועתקים אות-באות ומילה-במילה ללא שום שינוי.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """
 }
+
+# תמיכה לאחור בבחירות סגנון קודמות
+PROMPTS["ישיבתי-למדני (סגנון שו\"ת)"] = PROMPTS["סגנון שו\"ת"]
+PROMPTS["מחקר תורני קפדני (מדויק ומבוסס מקורות)"] = PROMPTS["ישיבתי-למדני"]
 
 # ==========================================
 # 6. שכבת אימות קפדנית (Validation Layer)
@@ -521,7 +567,7 @@ def get_supported_models():
 
 def get_gemini_response(prompt, sources, context, style):
     """יוצר תשובה מחמירה מבוססת מקורות ומריץ שכבת אימות ותיקון אוטונומי"""
-    system_instruction = PROMPTS.get(style, PROMPTS["מחקר תורני קפדני (מדויק ומבוסס מקורות)"])
+    system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
     full_prompt = f"{system_instruction}\n\nמקורות שנשלפו בזמן אמת (Context):\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
     available_models = get_supported_models()
