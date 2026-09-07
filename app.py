@@ -1117,6 +1117,67 @@ def get_gemini_response(prompt, sources, context, style="פשוט ומונגש")
     val_report = verify_verbatim_citations(response_text, sources)
     return response_text, val_report
 
+class SugyaAnswer(str):
+    """מחלקת תשובה המרחיבה מחרוזת טקסט ומכילה גם מקורות ודוח אימות"""
+    def __new__(cls, content, sources=None, validation=None):
+        obj = super().__new__(cls, content)
+        obj.content = content
+        obj.sources = sources if sources is not None else []
+        obj.validation = validation if validation is not None else {}
+        return obj
+
+    def get(self, key, default=None):
+        if key == "content":
+            return self.content
+        elif key == "sources":
+            return self.sources
+        elif key == "validation":
+            return self.validation
+        return default
+
+    def __getitem__(self, item):
+        if item == "content":
+            return self.content
+        elif item == "sources":
+            return self.sources
+        elif item == "validation":
+            return self.validation
+        return super().__getitem__(item)
+
+def analyze_sugya(messages, style_mode="פשוט ומונגש", use_sefaria=None):
+    """
+    מנתח סוגיה תורנית בצורה מעמיקה ומהירה:
+    שולף מקורות תורניים מוסמכים (תנ\"ך, ש\"ס, רמב\"ם, שו\"ע ונושאי כלים),
+    מרכיב את ההקשר ומפעיל את מודל השפה לקבלת פסק ומסקנות עם אימות מילולי מחמיר.
+    """
+    if isinstance(messages, list) and len(messages) > 0:
+        last_msg = messages[-1]
+        user_prompt = last_msg.get("content", "") if isinstance(last_msg, dict) else str(last_msg)
+    else:
+        user_prompt = str(messages)
+
+    should_use_sefaria = use_sefaria if use_sefaria is not None else globals().get("use_sefaria", True)
+    
+    sources = []
+    if should_use_sefaria:
+        try:
+            sources = search_sefaria_and_local(user_prompt, max_results=7)
+        except Exception:
+            try:
+                sources = search_sefaria_fast(user_prompt, max_results=7)
+            except Exception:
+                sources = []
+
+    context_sources = format_context_sources(sources)
+    try:
+        response_text, validation_report = get_gemini_response(user_prompt, sources, context_sources, style_mode)
+    except Exception as e:
+        response_text = f"אירעה שגיאה בניתוח הסוגיה: {str(e)}"
+        validation_report = {"is_valid": False, "details": str(e)}
+
+    return SugyaAnswer(response_text, sources=sources, validation=validation_report)
+
+
 # ==========================================
 # 7. ניהול Session State
 # ==========================================
@@ -1232,6 +1293,8 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
     with col2:
         use_sefaria = st.checkbox("🔍 שלוף מקורות בזמן אמת (Sefaria API)", value=True)
 
+    style_mode = learning_style
+
     st.divider()
 
     for msg in current_chat["messages"]:
@@ -1255,18 +1318,44 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             st.markdown(user_input)
 
         with st.chat_message("assistant"):
-            sources = []
-            if use_sefaria:
-                with st.spinner("שולף מקורות תורניים ומעיין בסוגיה..."):
-                    sources = search_sefaria_and_local(user_input, max_results=7)
-            context_sources = format_context_sources(sources)
+            # רשימת המשפטים המעודכנת
+            messages_list = [
+                "יהונתן חושב...",
+                "יהונתן עומד לפתור את הסוגיה...",
+                "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
+                "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
+                "יהונתן צריך ריכוז...",
+                "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
+                "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה...",
+                "יהונתן מעיין בשיטות הראשונים...",
+                "יהונתן מדייק בלשון השולחן ערוך והרמ\"א..."
+            ]
 
-            # הזרמה ישירה ומהירה של תשובת ה-AI בזמן אמת (Fast Streaming)
-            response_text = st.write_stream(stream_gemini_response(user_input, context_sources, learning_style))
+            # שימוש ברכיב st.status עם דחיפת שינויים בלייב ובדיקת סיום מהירה
+            with st.status(messages_list[0], expanded=False) as status:
+                with ThreadPoolExecutor() as executor:
+                    future = executor.submit(analyze_sugya, current_chat["messages"], style_mode)
+                    
+                    idx = 0
+                    last_update = time.time()
+                    
+                    while not future.done():
+                        # עדכון הטקסט בתיבה בלייב מדי 2.5 שניות
+                        if time.time() - last_update >= 2.5:
+                            idx += 1
+                            current_msg = messages_list[idx % len(messages_list)]
+                            status.update(label=current_msg)
+                            last_update = time.time()
+                        
+                        time.sleep(0.1)
+                    
+                    answer = future.result()
+                    status.update(label="יהונתן סיים לפתור את הסוגיה בהצלחה!", state="complete", expanded=False)
 
-            # אימות מילולי מיידי (Optimized Validation) ללא השהיה וללא קריאות LLM חוסמות
-            validation_report = verify_verbatim_citations(response_text, sources)
+            st.markdown(str(answer))
 
+            sources = getattr(answer, "sources", [])
+            validation_report = getattr(answer, "validation", {})
             if sources:
                 with st.expander(f"📚 מקורות שנשלפו ואומתו בזמן אמת ({len(sources)})", expanded=False):
                     if validation_report.get("is_valid"):
@@ -1276,12 +1365,12 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
                     for s in sources:
                         st.markdown(f"**[{s['ref']}]** — [קישור ישיר למקור בספריא]({s['url']})")
                         st.markdown(f"> *{s['text'][:350]}...*")
-            elif "המידע המבוקש אינו מופיע במקורות שנשלפו" in response_text:
+            elif "המידע המבוקש אינו מופיע במקורות שנשלפו" in str(answer):
                 st.info("ℹ️ **דיווח על היעדר מידע:** המודל פעל על פי חוקי הברזל ולא המציא מידע שלא נשלף.")
 
         current_chat["messages"].append({
             "role": "assistant",
-            "content": response_text,
+            "content": str(answer),
             "sources": sources,
             "validation": validation_report
         })
