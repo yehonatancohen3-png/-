@@ -503,8 +503,18 @@ def extract_quotes(text):
                 quotes.append(clean_q)
     return list(dict.fromkeys(quotes))
 
-def validate_response(response_text, sources):
-    """בודק התאמה מילולית (Verbatim) ב-100% עבור כל הציטוטים שבתוך מרכאות"""
+def verify_verbatim_citations(response_text, sources):
+    """בודק התאמה מילולית (Verbatim) של ציטוטים באמצעות התאמת מחרוזות בזיכרון ו-Regex בלבד (ללא קריאות LLM חוסמות)"""
+    if not sources:
+        return {
+            "is_valid": True,
+            "grounding_score": 100.0,
+            "total_quotes": 0,
+            "verified_quotes": [],
+            "unverified_quotes": [],
+            "details": "לא נשלפו מקורות חיצוניים."
+        }
+
     combined_sources = " ".join([remove_cantillation_and_niqqud(s.get("text", "")) for s in sources])
     quotes = extract_quotes(response_text)
     verified = []
@@ -539,41 +549,45 @@ def validate_response(response_text, sources):
         "details": details
     }
 
+# תאימות לאחור
+validate_response = verify_verbatim_citations
+
 # ==========================================
-# 7. מנוע ג'מיני - זיהוי דינמי וקריאה מבוקרת אימות
+# 7. מנוע ג'מיני - זיהוי דינמי והזרמת תשובה מהירה (Fast Streaming)
 # ==========================================
 @st.cache_resource(ttl=3600)
 def get_supported_models():
-    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון, בהעדפה לדגמי flash עדכניים"""
+    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון, בהעדפה לדגמי flash עדכניים ומהירים"""
     try:
         active_models = []
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
-                if '2.5-flash' not in m.name and 'preview-tts' not in m.name and 'image' not in m.name:
+                if 'preview-tts' not in m.name and 'image' not in m.name and 'transcribe' not in m.name and 'computer-use' not in m.name:
                     active_models.append(m.name)
         
         active_models.sort(key=lambda name: (
-            0 if '3.6-flash' in name else
-            1 if '3.7-flash' in name else
-            2 if 'flash-latest' in name else
-            3 if '3.5-flash' in name else
-            4 if 'flash' in name else 5
+            0 if '3.7-flash' in name else
+            1 if '3.8-flash' in name else
+            2 if '3.6-flash' in name else
+            3 if 'flash-latest' in name else
+            4 if '3.5-flash' in name else
+            5 if '2.5-flash' in name else
+            6 if 'flash' in name else 7
         ))
         if active_models:
             return active_models
     except Exception:
         pass
     
-    return ['models/gemini-3.6-flash', 'models/gemini-flash-latest']
+    return ['models/gemini-3.7-flash', 'models/gemini-3.6-flash', 'models/gemini-flash-latest', 'models/gemini-2.5-flash']
 
-def get_gemini_response(prompt, sources, context, style):
-    """יוצר תשובה מחמירה מבוססת מקורות ומריץ שכבת אימות ותיקון אוטונומי"""
+def stream_gemini_response(prompt, context, style="פשוט ומונגש"):
+    """הזרמת תשובה בזמן אמת מ-Gemini API (Fast Streaming) עם מעבר אוטומטי למודל גיבוי בעת עומס"""
     system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
     full_prompt = f"{system_instruction}\n\nמקורות שנשלפו בזמן אמת (Context):\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
     available_models = get_supported_models()
     last_error = ""
-    response_text = ""
     
     for model_name in available_models:
         try:
@@ -582,50 +596,27 @@ def get_gemini_response(prompt, sources, context, style):
                 generation_config=generation_config,
                 system_instruction=SYSTEM_PROMPT
             )
-            response = model.generate_content(full_prompt)
-            if response and response.text:
-                response_text = response.text
-                break
+            response = model.generate_content(full_prompt, stream=True)
+            has_yielded = False
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+                    has_yielded = True
+            if has_yielded:
+                return
         except Exception as e:
             last_error = str(e)
             continue
+            
+    yield f"אירעה שגיאה בקבלת תשובה מהמודל: {last_error}"
 
-    if not response_text:
-        return f"אירעה שגיאה בחיבור למודלים: {last_error}", {"is_valid": False, "details": last_error}
-
-    # שכבת אימות (Validation Layer)
-    val_report = validate_response(response_text, sources)
-
-    # מנגנון תיקון אוטונומי במידה וזוהה ציטוט שלא מופיע במקורות שנשלפו
-    if not val_report["is_valid"] and sources:
-        correction_prompt = f"""{SYSTEM_PROMPT}
-
-שים לב: התשובה שנוסחה הכילה ציטוטים בתוך מרכאות שלא הופיעו מילה-במילה במקורות שנשלפו:
-{val_report['unverified_quotes']}
-
-אנא תקן את התשובה בהתאם לחוקי המענה והציטוט:
-1. את ההסבר והמושגים כתוב בלשונך באופן הברור והטבעי ביותר (ללא מרכאות).
-2. ציטוטים בתוך מרכאות חובה להעתיק אך ורק אות-באות ומילה-במילה מתוך ה-Context המוזרק בלבד:
-{context}
-
-שאלה מקורית:
-{prompt}
-"""
-        for model_name in available_models:
-            try:
-                model = genai.GenerativeModel(
-                    model_name=model_name,
-                    generation_config=generation_config,
-                    system_instruction=SYSTEM_PROMPT
-                )
-                corr_resp = model.generate_content(correction_prompt)
-                if corr_resp and corr_resp.text:
-                    new_val = validate_response(corr_resp.text, sources)
-                    if new_val["is_valid"] or new_val["grounding_score"] >= val_report["grounding_score"]:
-                        return corr_resp.text, new_val
-            except Exception:
-                continue
-
+def get_gemini_response(prompt, sources, context, style="פשוט ומונגש"):
+    """קריאה סינכרונית מהירה ל-Gemini ואימות מילולי בזיכרון ללא קריאות LLM חוסמות"""
+    chunks = []
+    for chunk in stream_gemini_response(prompt, context, style):
+        chunks.append(chunk)
+    response_text = "".join(chunks)
+    val_report = verify_verbatim_citations(response_text, sources)
     return response_text, val_report
 
 # ==========================================
@@ -766,40 +757,17 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             st.markdown(user_input)
 
         with st.chat_message("assistant"):
-            status_placeholder = st.empty()
-            
-            loading_messages = [
-                "יהונתן חושב...",
-                "יהונתן עומד לפתור את הסוגיה...",
-                "יהונתן מריץ חיפוש בראש וכל התורה כולה לנגד עיניו...",
-                "ליהונתן יש פיתרון, וחושב על כיוונים אחרים...",
-                "יהונתן צריך ריכוז...",
-                "יהונתן מקבץ כל מיני שו\"תים שנזכר בהם בהקשר לשאלה...",
-                "יהונתן מבין שהשאלה מסובכת, אך אין שאלה שתישאר לא פתורה..."
-            ]
-
-            def execute_pipeline():
-                sources = []
-                if use_sefaria:
+            sources = []
+            if use_sefaria:
+                with st.spinner("שולף מקורות תורניים ומעיין בסוגיה..."):
                     sources = search_sefaria_and_local(user_input, max_results=5)
-                context_sources = format_context_sources(sources)
-                resp_text, val_rep = get_gemini_response(user_input, sources, context_sources, learning_style)
-                return resp_text, sources, val_rep
+            context_sources = format_context_sources(sources)
 
-            with ThreadPoolExecutor() as executor:
-                future = executor.submit(execute_pipeline)
-                
-                msg_idx = 0
-                while not future.done():
-                    current_msg = loading_messages[msg_idx % len(loading_messages)]
-                    status_placeholder.markdown(f"⏳ **{current_msg}**")
-                    time.sleep(2)
-                    msg_idx += 1
-                
-                response_text, sources, validation_report = future.result()
+            # הזרמה ישירה ומהירה של תשובת ה-AI בזמן אמת (Fast Streaming)
+            response_text = st.write_stream(stream_gemini_response(user_input, context_sources, learning_style))
 
-            status_placeholder.empty()
-            st.markdown(response_text)
+            # אימות מילולי מיידי (Optimized Validation) ללא השהיה וללא קריאות LLM חוסמות
+            validation_report = verify_verbatim_citations(response_text, sources)
 
             if sources:
                 with st.expander(f"📚 מקורות שנשלפו ואומתו בזמן אמת ({len(sources)})", expanded=False):
