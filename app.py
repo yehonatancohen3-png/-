@@ -354,106 +354,481 @@ def fetch_sefaria_text_by_ref(ref_str: str) -> str:
 
 fetch_single_ref_text = fetch_sefaria_text_by_ref
 
+# ==========================================
+# 4. הגדרות סיווג מקורות, עדיפויות והרחבת שאילתות (Primary Sources First)
+# ==========================================
+TALMUD_TRACTATES = {
+    'Berakhot', 'Shabbat', 'Eruvin', 'Pesachim', 'Shekalim', 'Yoma', 'Sukkah',
+    'Beitzah', 'Rosh Hashanah', 'Ta\'anit', 'Megillah', 'Moed Katan', 'Chagigah',
+    'Yevamot', 'Ketubot', 'Nedarim', 'Nazir', 'Sotah', 'Gittin', 'Kiddushin',
+    'Bava Kamma', 'Bava Metzia', 'Bava Batra', 'Sanhedrin', 'Makkot', 'Shevuot',
+    'Avodah Zarah', 'Horayot', 'Zevachim', 'Menachot', 'Chullin', 'Bekhorot',
+    'Arakhin', 'Temurah', 'Keritot', 'Meilah', 'Tamid', 'Niddah'
+}
+
+HEBREW_TRACTATES = [
+    'ברכות', 'שבת', 'עירובין', 'פסחים', 'שקלים', 'יומא', 'סוכה', 'ביצה',
+    'ראש השנה', 'תענית', 'מגילה', 'מועד קטן', 'חגיגה', 'יבמות', 'כתובות',
+    'נדרים', 'נזיר', 'סוטה', 'גיטין', 'קידושין', 'בבא קמא', 'בבא מציעא',
+    'בבא בתרא', 'סנהדרין', 'מכות', 'שבועות', 'עבודה זרה', 'הוריות', 'זבחים',
+    'מנחות', 'חולין', 'בכורות', 'ערכין', 'תמורה', 'כריתות', 'מעילה', 'תמיד', 'נדה',
+    'אהלות', 'אוהלות', 'כלים', 'טהרות', 'מקואות', 'עוקצין'
+]
+
+TANAKH_BOOKS = {
+    'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy', 'Joshua', 'Judges',
+    'I Samuel', 'II Samuel', 'I Kings', 'II Kings', 'Isaiah', 'Jeremiah', 'Ezekiel',
+    'Hosea', 'Joel', 'Amos', 'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk',
+    'Zephaniah', 'Haggai', 'Zechariah', 'Malachi', 'Psalms', 'Proverbs', 'Job',
+    'Song of Songs', 'Ruth', 'Lamentations', 'Ecclesiastes', 'Esther', 'Daniel',
+    'Ezra', 'Nehemiah', 'I Chronicles', 'II Chronicles'
+}
+
+HEBREW_TANAKH = [
+    'בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים', 'יהושע', 'שופטים', 'שמואל', 'מלכים',
+    'ישעיהו', 'ירמיהו', 'יחזקאל', 'הושע', 'יואל', 'עמוס', 'עובדיה', 'יונה', 'מיכה',
+    'נחום', 'חבקוק', 'צפניה', 'חגי', 'זכריה', 'מלאכי', 'תהילים', 'משלי', 'איוב',
+    'שיר השירים', 'רות', 'איכה', 'קהלת', 'אסתר', 'דניאל', 'עזרא', 'נחמיה', 'דברי הימים'
+]
+
+CONCEPTUAL_EXPANSIONS = {
+    "שעות זמניות": {
+        "refs": [
+            "Shulchan Arukh, Orach Chayim 233:1",
+            "Mishnah Berakhot 1:2",
+            "Mishnah Berakhot 4:1",
+            "Berakhot 26b",
+            "Mishneh Torah, Reading the Shema 1:9",
+            "Mishneh Torah, Prayer and the Priestly Blessing 3:1"
+        ],
+        "queries": ["שעות ביום", "עד שלש שעות", "ארבע שעות", "שיעור שעות"]
+    },
+    "אין דוחין נפש מפני נפש": {
+        "refs": [
+            "Mishnah Oholot 7:6",
+            "Sanhedrin 72b",
+            "Sanhedrin 74a",
+            "Mishneh Torah, Murderer and the Preservation of Life 1:9",
+            "Shulchan Arukh, Choshen Mishpat 425:2"
+        ],
+        "queries": ["נפש מפני נפש", "יצא ראשו אין נוגעין בו", "מאי חזית דדמא דידך סומק"]
+    },
+    "פיקוח נפש": {
+        "refs": [
+            "Yoma 85a",
+            "Yoma 85b",
+            "Shabbat 132a",
+            "Mishneh Torah, Sabbath 2:1",
+            "Shulchan Arukh, Orach Chayim 328:1"
+        ],
+        "queries": ["פיקוח נפש דוחה שבת", "וחי בהם ולא שימות בהם"]
+    },
+    "גרמא": {
+        "refs": [
+            "Bava Kamma 60a",
+            "Bava Batra 22b",
+            "Sanhedrin 76b",
+            "Mishneh Torah, Wounding and Damaging 4:2",
+            "Shulchan Arukh, Choshen Mishpat 386:1"
+        ],
+        "queries": ["גרם נזיקין", "גרמא בנזיקין פטור", "גרמי חייב"]
+    },
+    "ספק דאורייתא": {
+        "refs": [
+            "Pesachim 9a",
+            "Ketubot 9a",
+            "Beitzah 3b",
+            "Mishneh Torah, Rebels 1:5",
+            "Shulchan Arukh, Yoreh De'ah 110:1"
+        ],
+        "queries": ["ספק דאורייתא לחומרא", "ספק דרבנן לקולא"]
+    },
+    "ספק ברכות": {
+        "refs": [
+            "Berakhot 12a",
+            "Berakhot 35a",
+            "Mishneh Torah, Blessings 8:12",
+            "Shulchan Arukh, Orach Chayim 209:3"
+        ],
+        "queries": ["ספק ברכות להקל", "סב״ל"]
+    },
+    "קים ליה בדרבה מיניה": {
+        "refs": [
+            "Ketubot 30a",
+            "Sanhedrin 37a",
+            "Bava Kamma 70b",
+            "Mishneh Torah, Theft 3:1",
+            "Shulchan Arukh, Choshen Mishpat 351:1"
+        ],
+        "queries": ["קלבד״מ", "אלא במיתה או בתשלומין"]
+    },
+    "המוציא מחברו עליו הראיה": {
+        "refs": [
+            "Bava Kamma 46a",
+            "Bava Metzia 100a",
+            "Mishneh Torah, Pleading 8:1",
+            "Shulchan Arukh, Choshen Mishpat 399:1"
+        ],
+        "queries": ["המע״ה", "קרקע בחזקת בעליה עומדת"]
+    },
+    "יהרג ואל יעבור": {
+        "refs": [
+            "Sanhedrin 74a",
+            "Pesachim 25a",
+            "Yoma 82a",
+            "Mishneh Torah, Foundations of the Torah 5:1",
+            "Shulchan Arukh, Yoreh De'ah 157:1"
+        ],
+        "queries": ["שלוש עבירות חמורות", "עבודה זרה גילוי עריות ושפיכות דמים"]
+    },
+    "טבילת כלים": {
+        "refs": [
+            "Avodah Zarah 75b",
+            "Mishneh Torah, Forbidden Foods 17:3",
+            "Shulchan Arukh, Yoreh De'ah 120:1"
+        ],
+        "queries": ["כלי סעודה הנלקחים מן הגוי", "הטבלת כלים"]
+    },
+    "קידוש במקום סעודה": {
+        "refs": [
+            "Pesachim 101a",
+            "Mishneh Torah, Sabbath 29:8",
+            "Shulchan Arukh, Orach Chayim 273:1"
+        ],
+        "queries": ["אין קידוש אלא במקום סעודה"]
+    },
+    "שינוי מקום": {
+        "refs": [
+            "Pesachim 101b",
+            "Berakhot 42a",
+            "Mishneh Torah, Blessings 4:1",
+            "Shulchan Arukh, Orach Chayim 178:1"
+        ],
+        "queries": ["שינוי מקום בברכות", "עקירת מקום"]
+    },
+    "פסיק רישיה": {
+        "refs": [
+            "Shabbat 75a",
+            "Shabbat 103a",
+            "Mishneh Torah, Sabbath 1:5",
+            "Shulchan Arukh, Orach Chayim 320:18"
+        ],
+        "queries": ["פסיק רישא ולא ימות", "דבר שאינו מתכוון"]
+    },
+    "מצוות צריכות כוונה": {
+        "refs": [
+            "Rosh Hashanah 28a",
+            "Berakhot 13a",
+            "Pesachim 114a",
+            "Mishneh Torah, Shofar, Sukkah and Lulav 2:4",
+            "Shulchan Arukh, Orach Chayim 60:4"
+        ],
+        "queries": ["מצוות אין צריכות כוונה", "המתעסק"]
+    },
+    "ביטול ברוב": {
+        "refs": [
+            "Chullin 98a",
+            "Zevachim 78a",
+            "Mishneh Torah, Forbidden Foods 15:1",
+            "Shulchan Arukh, Yoreh De'ah 98:1"
+        ],
+        "queries": ["ביטול בשישים", "אחרי רבים להטות"]
+    },
+    "דינא דמלכותא דינא": {
+        "refs": [
+            "Nedarim 28a",
+            "Gittin 10b",
+            "Bava Kamma 113a",
+            "Mishneh Torah, Robbery and Lost Property 5:11",
+            "Shulchan Arukh, Choshen Mishpat 369:6"
+        ],
+        "queries": ["דדמ״ד", "דינא דמלכותא"]
+    },
+    "חמץ שעבר עליו הפסח": {
+        "refs": [
+            "Pesachim 28a",
+            "Mishneh Torah, Leavened and Unleavened Bread 1:4",
+            "Shulchan Arukh, Orach Chayim 448:1"
+        ],
+        "queries": ["חמץ לאחר הפסח", "קנסו חכמים"]
+    },
+    "הבדלה": {
+        "refs": [
+            "Berakhot 33a",
+            "Pesachim 102b",
+            "Mishneh Torah, Sabbath 29:1",
+            "Shulchan Arukh, Orach Chayim 296:1"
+        ],
+        "queries": ["הבדלה על הכוס", "זכרהו על היין"]
+    }
+}
+
+def classify_source_priority(ref_str: str) -> int:
+    """
+    קביעת עדיפות המקור להרכבת הקונטקסט:
+    1 - מקרא, משנה, תלמוד בבלי וירושלמי (Primary Texts)
+    2 - רמב"ם (משנה תורה) ושולחן ערוך גופא (Primary Codes)
+    3 - ראשונים (רש"י, תוספות, רמב"ן, רשב"א, רא"ש, רי"ף וכו')
+    4 - נושאי כלי השו"ע ואחרונים קלאסיים (משנה ברורה, מגן אברהם וכו')
+    5 - מפרשים מאוחרים, שו"תים ומחקר
+    """
+    if not ref_str:
+        return 5
+    ref = ref_str.strip()
+
+    # זיהוי פירוש לפי תבניות מובהקות
+    is_commentary = bool(
+        re.search(r'\b(on|upon)\b', ref, re.IGNORECASE) or 
+        ' על ' in ref or 
+        ref.startswith('פירוש ') or 
+        ref.startswith('ביאור ') or
+        ref.startswith('חידושי ')
+    )
+
+    # 1. החרגות לאחרונים ששמם מתחיל במילים מטעות (כגון "משנה ברורה")
+    if (
+        ref.startswith('Mishnah Berurah') or 
+        ref.startswith('משנה ברורה') or 
+        'Mishnah Berurah' in ref or 
+        'משנה ברורה' in ref or
+        ref.startswith('Biur Halacha') or
+        ref.startswith('ביאור הלכה')
+    ):
+        return 4
+
+    # 2. רמב"ם גופא (Primary Code: Mishneh Torah) - נבדק לפני משנה בגלל הקידומת "משנה תורה"
+    if not is_commentary:
+        if (
+            ref.startswith('Mishneh Torah') or 
+            ref.startswith('משנה תורה') or 
+            (ref.startswith('רמב"ם') and not any(k in ref for k in ['כסף משנה', 'מגיד משנה', 'לחם משנה']))
+        ):
+            return 2
+
+    # 3. שולחן ערוך וטור גופא (Primary Code: Shulchan Arukh & Tur)
+    if not is_commentary:
+        if (
+            ref.startswith('Shulchan Arukh') or 
+            ref.startswith('שולחן ערוך') or
+            ref.startswith('Tur, ') or
+            ref.startswith('טור, ')
+        ):
+            return 2
+
+    # 4. מקרא (Primary Tanakh)
+    if not is_commentary:
+        for b in TANAKH_BOOKS:
+            if ref.startswith(b):
+                return 1
+        for hb in HEBREW_TANAKH:
+            if ref.startswith(hb):
+                return 1
+
+    # 5. משנה (Primary Mishnah)
+    if not is_commentary:
+        if (ref.startswith('Mishnah ') or ref.startswith('משנה ')) and not ref.startswith('משנה תורה'):
+            return 1
+
+    # 6. תלמוד בבלי וירושלמי (Primary Talmud)
+    if not is_commentary:
+        for t in TALMUD_TRACTATES:
+            if ref.startswith(t):
+                return 1
+        for ht in HEBREW_TRACTATES:
+            if ref.startswith(ht) or ref.startswith(f"מסכת {ht}"):
+                return 1
+        if ref.startswith('Jerusalem Talmud') or ref.startswith('תלמוד ירושלמי'):
+            return 1
+
+    # 7. ראשונים (Rishonim)
+    rishonim_markers = [
+        'Rashi', 'Tosafot', 'Ramban', 'Rashba', 'Ritva', 'Ran', 'Rosh', 'Rif', 
+        'Meiri', 'Sefer HaChinukh', 'Maggid Mishneh', 'Kesef Mishneh', 'Ra\'avad',
+        'רש"י', 'תוספות', 'רמב"ן', 'רשב"א', 'ריטב"א', 'ר"ן', 'רא"ש', 'רי"ף', 
+        'מאירי', 'ספר החינוך', 'מגיד משנה', 'כסף משנה', 'ראב"ד'
+    ]
+    if any(m in ref for m in rishonim_markers):
+        return 3
+
+    # 8. נושאי כלי השו"ע ואחרונים קלאסיים
+    acharonim_markers = [
+        'Magen Avraham', 'Turei Zahav', 'Taz', 'Siftei Kohen', 'Shach', 'Beur HaGra',
+        'Gra', 'Kaf HaChayim', 'Arukh HaShulchan', 'Chayei Adam', 'Pitchei Teshuva',
+        'Ba\'er Hetev', 'Ketzot HaChoshen', 'Netivot HaMishpat', 'Chatam Sofer',
+        'מגן אברהם', 'ט"ז', 'טורי זהב', 'ש"ך', 'שפתי כהן', 'ביאור הגר"א', 'הגר"א',
+        'כף החיים', 'ערוך השולחן', 'חיי אדם', 'פתחי תשובה', 'באר היטב', 'קצות החושן',
+        'נתיבות המשפט', 'חתם סופר', 'פרי מגדים', 'Peri Megadim', 'משפטי עוזיאל', 'יביע אומר'
+    ]
+    if any(m in ref for m in acharonim_markers):
+        return 4
+
+    return 5
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_sefaria_sources_robust(user_query: str) -> List[str]:
     """
-    Fetches raw Hebrew sources from Sefaria API with automatic URL encoding,
-    Hebrew reference titles, and multi-stage fallback.
+    שליפת מקורות מספריא בעדיפות עליונה לקטגוריות ראשיות (תנ"ך, משנה, תלמוד, רמב"ם ושולחן ערוך)
+    לפני פרשנים ואחרונים, כולל הרחבת שאילתות למושגים הלכתיים (Query Expansion),
+    שליפה מקבילית מסוננת לפי קטגוריות, ומראי מקומות בעברית בלבד.
     """
-    retrieved_texts = []
     raw_query = user_query.strip()
     clean_query = re.sub(r'[^\w\s]', '', user_query).strip()
-    
     if not clean_query and not raw_query:
-        return retrieved_texts
+        return []
 
-    # 1. Encode Hebrew string for safe HTTP requests (keeping ref punctuation like : or .)
-    target_ref = raw_query if any(c in raw_query for c in [':', '.']) else clean_query
-    encoded_query = urllib.parse.quote(target_ref)
-    
-    # 2. Stage 1: Try Sefaria Text Search API (Global Search)
-    search_url = "https://www.sefaria.org/api/search-wrapper"
-    payload = {
-        "query": clean_query,
-        "type": "text",
-        "size": 5,
-        "field": "naive_lemmatizer"
-    }
-    
-    headers = {"Content-Type": "application/json"}
+    collected_sources = []
+    seen_refs = set()
 
-    try:
-        response = HTTP_SESSION.post(search_url, json=payload, headers=headers, timeout=6)
-        if response.status_code == 200:
-            hits = response.json().get("hits", {}).get("hits", [])
-            for hit in hits:
-                source_data = hit.get("_source") or {}
-                ref = source_data.get("ref")
-                # חילוץ Ref מתוך _id במידה ושדה ref חסר ב-_source
-                if not ref and hit.get("_id"):
-                    raw_id = hit.get("_id", "")
-                    m = re.match(r'^([^(]+)', raw_id)
-                    ref = m.group(1).strip() if m else raw_id
-                
-                he_ref = source_data.get("heRef", "")
-                he_text = source_data.get("he", "")
-                
-                # שליפת הטקסט המלא ומראה המקום בעברית אם נדרש
-                if ref:
-                    fetched_text, fetched_he_ref = fetch_sefaria_text_and_he_ref(ref)
-                    if not he_text and fetched_text:
-                        he_text = fetched_text
-                    if fetched_he_ref:
-                        he_ref = fetched_he_ref
-                
-                if not he_text and hit.get("highlight"):
-                    hl = hit.get("highlight", {})
-                    hl_snippets = []
-                    for v in hl.values():
-                        if isinstance(v, list):
-                            hl_snippets.extend(v)
-                    he_text = " ... ".join(hl_snippets)
-                
-                display_ref = he_ref if he_ref else (ref or "")
-                
-                # ניקוי תגיות HTML במידה וקיימות
-                clean_he = re.sub(r'<[^>]+>', '', str(he_text)).strip()
-                if clean_he and display_ref and not any(c.startswith(f"[{display_ref}]") for c in retrieved_texts):
-                    retrieved_texts.append(f"[{display_ref}]\n{clean_he}")
-    except Exception as e:
-        print(f"Sefaria Search API Error: {e}")
+    # 1. הרחבת שאילתה (Query Expansion) למושגים תורניים והלכתיים
+    expanded_refs = []
+    expanded_queries = []
+    for concept, data in CONCEPTUAL_EXPANSIONS.items():
+        if concept in user_query or user_query in concept:
+            expanded_refs.extend(data.get("refs", []))
+            expanded_queries.extend(data.get("queries", []))
+            break
 
-    # 3. Stage 2: Fallback to Direct Ref Fetch if Search returned empty
-    if not retrieved_texts:
+    # שליפה ישירה ומקבילית של מראי מקומות מורחבים
+    if expanded_refs:
+        def fetch_direct_item(r):
+            t, hr = fetch_sefaria_text_and_he_ref(r)
+            return r, hr, t
+
+        with ThreadPoolExecutor(max_workers=min(len(expanded_refs), 6)) as executor:
+            for r, hr, t in executor.map(fetch_direct_item, expanded_refs):
+                if t:
+                    display_ref = hr if hr else r
+                    if display_ref not in seen_refs:
+                        seen_refs.add(display_ref)
+                        prio = classify_source_priority(r)
+                        collected_sources.append((prio, display_ref, t))
+
+    # 2. שליפה מקבילית לפי קטגוריות ראשיות (Categorized Retrieval)
+    primary_categories = [
+        ("Mishnah", ["Mishnah"]),
+        ("Talmud/Bavli", ["Talmud/Bavli"]),
+        ("Halakhah/Mishneh Torah", ["Halakhah/Mishneh Torah"]),
+        ("Halakhah/Shulchan Arukh", ["Halakhah/Shulchan Arukh"]),
+        ("Tanakh", ["Tanakh"]),
+        ("Global", None)
+    ]
+
+    # הכנת שאילתות להרצה (השאילתה המקורית + שאילתות מורחבות אם יש)
+    search_queries = [clean_query]
+    if expanded_queries:
+        search_queries.extend(expanded_queries[:2])
+
+    def query_category(cat_info):
+        cat_name, cat_filter = cat_info
+        results = []
+        for q in search_queries:
+            payload = {
+                "query": q,
+                "type": "text",
+                "size": 3,
+                "field": "naive_lemmatizer"
+            }
+            if cat_filter:
+                payload["filters"] = cat_filter
+                payload["filter_fields"] = ["path"]
+            try:
+                res = HTTP_SESSION.post("https://www.sefaria.org/api/search-wrapper", json=payload, timeout=5)
+                if res.status_code == 200:
+                    hits = res.json().get("hits", {}).get("hits", [])
+                    for h in hits:
+                        results.append(h)
+            except Exception:
+                pass
+            if len(results) >= 3:
+                break
+        return results
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        cat_hits_lists = executor.map(query_category, primary_categories)
+        all_hits = [hit for sublist in cat_hits_lists for hit in sublist]
+
+    # עיבוד התוצאות מהקטגוריות השונות
+    for hit in all_hits:
+        source_data = hit.get("_source") or {}
+        ref = source_data.get("ref")
+        if not ref and hit.get("_id"):
+            raw_id = hit.get("_id", "")
+            m = re.match(r'^([^(]+)', raw_id)
+            ref = m.group(1).strip() if m else raw_id
+
+        if not ref:
+            continue
+
+        he_ref = source_data.get("heRef", "")
+        he_text = source_data.get("he", "")
+
+        # שליפת טקסט עברי מלא ומראה מקום מדויק
+        if not he_text and ref:
+            t, hr = fetch_sefaria_text_and_he_ref(ref)
+            if t:
+                he_text = t
+            if hr:
+                he_ref = hr
+
+        display_ref = he_ref if he_ref else ref
+        if display_ref in seen_refs:
+            continue
+
+        if not he_text and hit.get("highlight"):
+            hl = hit.get("highlight", {})
+            hl_snippets = []
+            for v in hl.values():
+                if isinstance(v, list):
+                    hl_snippets.extend(v)
+            he_text = " ... ".join(hl_snippets)
+
+        clean_he = clean_html_tags(str(he_text))
+        if clean_he:
+            seen_refs.add(display_ref)
+            prio = classify_source_priority(ref)
+            collected_sources.append((prio, display_ref, clean_he))
+
+    # 3. גיבוי: שליפה ישירה של השאילתה כ-Ref במידה ולא נשלפו מקורות
+    if not collected_sources:
         try:
-            # ניסיון שליפה ישירה של טקסט אם השאילתה תואמת מראה מקום או ספר מוכר
+            target_ref = raw_query if any(c in raw_query for c in [':', '.']) else clean_query
+            encoded_query = urllib.parse.quote(target_ref)
             direct_url = f"https://www.sefaria.org/api/v3/texts/{encoded_query}?context=0"
             res = HTTP_SESSION.get(direct_url, timeout=5)
             if res.status_code == 200:
                 data = res.json()
                 he_ref = data.get("heRef", "")
                 display_ref = he_ref if he_ref else user_query
-                versions = data.get("versions", [])
-                for v in versions:
+                for v in data.get("versions", []):
                     if v.get("language") == "he":
                         t = v.get("text", "")
                         text_str = " ".join(t) if isinstance(t, list) else str(t)
-                        clean_t = re.sub(r'<[^>]+>', '', text_str).strip()
+                        clean_t = clean_html_tags(text_str)
                         if clean_t:
-                            retrieved_texts.append(f"[{display_ref}]\n{clean_t}")
+                            prio = classify_source_priority(target_ref)
+                            collected_sources.append((prio, display_ref, clean_t))
                             break
-        except Exception as e:
-            print(f"Sefaria Direct Fetch Error: {e}")
+        except Exception:
+            pass
+
+    # 4. הרכבת הקונטקסט לפי סדר עדיפויות קפדני (Prioritized Context Assembly)
+    # מקורות ראשוניים (תנ"ך, משנה, תלמוד - 1, רמב"ם ושולחן ערוך - 2) מופיעים תמיד בראש הרשימה!
+    collected_sources.sort(key=lambda item: item[0])
+
+    retrieved_texts = []
+    for prio, disp_ref, text in collected_sources:
+        retrieved_texts.append(f"[{disp_ref}]\n{text}")
 
     return retrieved_texts
 
 search_sefaria_sources = get_sefaria_sources_robust
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_fast(query: str, max_results: int = 5):
+def search_sefaria_fast(query: str, max_results: int = 7):
     """
-    שליפה מובנית מספריא באמצעות מנוע השליפה המשופר (get_sefaria_sources_robust)
-    ומחזירה רשימת אובייקטים מובנים עבור ממשק המשתמש ושכבת האימות.
+    שליפה מובנית מספריא באמצעות מנוע השליפה המשופר והמתועדף (get_sefaria_sources_robust)
+    ומחזירה רשימת אובייקטים מובנים עבור ממשק המשתמש ושכבת האימות,
+    כאשר מקורות ראשוניים (חז"ל, רמב"ם, שו"ע) מופיעים בראש.
     """
     raw_contexts = get_sefaria_sources_robust(query)
     results = []
@@ -465,19 +840,21 @@ def search_sefaria_fast(query: str, max_results: int = 5):
             results.append({
                 "ref": ref_clean,
                 "text": text_clean,
-                "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_clean)}"
+                "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_clean)}",
+                "priority": classify_source_priority(ref_clean)
             })
         elif item.strip():
             results.append({
                 "ref": query.strip(),
                 "text": item.strip(),
-                "url": f"https://www.sefaria.org/{urllib.parse.quote(query.strip())}"
+                "url": f"https://www.sefaria.org/{urllib.parse.quote(query.strip())}",
+                "priority": 5
             })
     return results
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def search_sefaria_and_local(query, max_results=5):
-    """שילוב מיידי של מקורות מקומיים (0ms) עם תוצאות ספריא המואצות עם שמירת מטמון מקומי ל-24 שעות"""
+def search_sefaria_and_local(query, max_results=7):
+    """שילוב מיידי של מקורות מקומיים עם תוצאות ספריא המתועדפות לפי קטגוריות ראשיות"""
     sources = []
     
     # 1. חיפוש מיידי במאגר מקומי (Latency אפסי)
@@ -494,15 +871,17 @@ def search_sefaria_and_local(query, max_results=5):
                         ref_title = f"{entry.get('book', '')} {entry.get('masechet', entry.get('section', ''))} {entry.get('daf', '')}"
                         if entry.get('siman'):
                             ref_title += f" סימן {entry.get('siman')} סעיף {entry.get('seif', '')}"
+                        ref_clean = ref_title.strip()
                         sources.append({
-                            "ref": ref_title.strip(),
+                            "ref": ref_clean,
                             "text": clean_html_tags(entry.get("content", "")),
-                            "url": "מאגר תורני מקומי מאומת"
+                            "url": "מאגר תורני מקומי מאומת",
+                            "priority": classify_source_priority(ref_clean)
                         })
         except Exception:
             pass
 
-    # 2. שליפה מקבילית מספריא (ממוטבת במטמון)
+    # 2. שליפה מספריא בעדיפות למקורות ראשוניים
     try:
         sefaria_sources = search_sefaria_fast(query, max_results=max_results)
         for s in sefaria_sources:
@@ -513,6 +892,8 @@ def search_sefaria_and_local(query, max_results=5):
     except Exception:
         pass
 
+    # הבטחת סדר עדיפויות מוחלט: מקורות ראשוניים תמיד בראש
+    sources.sort(key=lambda s: s.get("priority", 5))
     return sources[:max_results]
 
 def format_context_sources(sources):
@@ -864,7 +1245,7 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             sources = []
             if use_sefaria:
                 with st.spinner("שולף מקורות תורניים ומעיין בסוגיה..."):
-                    sources = search_sefaria_and_local(user_input, max_results=5)
+                    sources = search_sefaria_and_local(user_input, max_results=7)
             context_sources = format_context_sources(sources)
 
             # הזרמה ישירה ומהירה של תשובת ה-AI בזמן אמת (Fast Streaming)
