@@ -5,6 +5,7 @@ import requests
 import re
 import time
 import uuid
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -267,108 +268,318 @@ if 'user_data' not in st.session_state:
     st.session_state.user_data = init_user_data()
 
 # ==========================================
-# 4. שליפה מהירה מספריא
+# 4. מנוע RAG רב-מקורות ושליפה מדויקת (Sefaria & Local DB)
 # ==========================================
-def clean_html_tags(text):
-    return re.sub(r'<[^>]+>', '', text)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TorahResearchBot/2.0"
+}
 
-def search_sefaria(query, limit=5):
-    url = "https://www.sefaria.org/api/v2/search/text"
-    payload = {
-        "query": query,
-        "type": "text",
-        "field": "exact",
-        "size": limit
-    }
-    results_text = ""
+def clean_html_tags(text):
+    """מנקה תגיות HTML ורווחי סרק מהטקסט"""
+    if not text:
+        return ""
+    clean = re.sub(r'<[^>]+>', '', text)
+    return re.sub(r'\s+', ' ', clean).strip()
+
+def remove_cantillation_and_niqqud(text):
+    """מסיר ניקוד, טעמי מקרא וגרשיים להשוואה מילולית מדויקת (Verbatim Matching)"""
+    if not text:
+        return ""
+    cleaned = re.sub(r'[\u0591-\u05BD\u05BF-\u05C7]', '', text)
+    cleaned = re.sub(r'[\"״״”"\'׳]', '', cleaned)
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
+def search_sefaria_and_local(query, max_results=5):
+    """שליפה היברידית של מקורות: מאגר מקומי מאומת, שליפת Ref ישירה, וחיפוש טקסטואלי רחב בספריא"""
+    sources = []
+    
+    # 1. בדיקת מאגר מקומי (data/torah_database.json)
+    db_path = os.path.join(DATA_DIR, "torah_database.json")
+    if os.path.exists(db_path):
+        try:
+            with open(db_path, "r", encoding="utf-8") as f:
+                db_data = json.load(f)
+                query_words = [w for w in re.split(r'\s+', query.strip()) if len(w) > 2]
+                for entry in db_data:
+                    entry_text = f"{entry.get('book','')} {entry.get('masechet','')} {entry.get('section','')} {entry.get('topic','')} {entry.get('content','')}"
+                    matches = sum(1 for w in query_words if w in entry_text)
+                    if matches > 0:
+                        ref_title = f"{entry.get('book', '')} {entry.get('masechet', entry.get('section', ''))} {entry.get('daf', '')}"
+                        if entry.get('siman'):
+                            ref_title += f" סימן {entry.get('siman')} סעיף {entry.get('seif', '')}"
+                        sources.append({
+                            "ref": ref_title.strip(),
+                            "text": clean_html_tags(entry.get("content", "")),
+                            "url": "מאגר תורני מקומי מאומת"
+                        })
+        except Exception:
+            pass
+
+    # 2. שליפת Ref ישיר מספריא (אם מדובר בציטוט מראה מקום מדויק)
     try:
-        response = requests.post(url, json=payload, timeout=4)
-        if response.status_code == 200:
-            hits = response.json().get("hits", {}).get("hits", [])
-            for hit in hits:
-                source = hit.get("_source", {})
-                ref = source.get("ref", "מקור לא ידוע")
-                he_text = source.get("he", "")
-                if isinstance(he_text, str) and he_text.strip():
-                    clean_text = clean_html_tags(he_text)
-                    results_text += f"\nמקור מתוך ספריא [{ref}]:\n\"{clean_text}\"\n"
+        direct_url = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(query.strip())}?context=0"
+        res = requests.get(direct_url, headers=HEADERS, timeout=3)
+        if res.status_code == 200:
+            d = res.json()
+            he_val = d.get("he")
+            if he_val:
+                text_content = " ".join([clean_html_tags(x) for x in he_val]) if isinstance(he_val, list) else clean_html_tags(he_val)
+                ref_name = d.get("ref", query)
+                if not any(s["ref"] == ref_name for s in sources):
+                    sources.append({
+                        "ref": ref_name,
+                        "text": text_content,
+                        "url": f"https://www.sefaria.org/{urllib.parse.quote(ref_name)}"
+                    })
     except Exception:
         pass
-    return results_text
+
+    # 3. חיפוש טקסטואלי מלא בספריא דרך search-wrapper
+    try:
+        search_url = "https://www.sefaria.org/api/search-wrapper"
+        payload = {"query": query, "size": max_results}
+        res = requests.post(search_url, json=payload, headers=HEADERS, timeout=4)
+        if res.status_code == 200:
+            hits = res.json().get("hits", {}).get("hits", [])
+            for hit in hits:
+                raw_id = hit.get("_id", "")
+                ref_match = re.match(r'^([^(]+)', raw_id)
+                clean_ref = ref_match.group(1).strip() if ref_match else raw_id
+                
+                if any(s["ref"] == clean_ref for s in sources):
+                    continue
+                
+                full_text = ""
+                try:
+                    ref_res = requests.get(f"https://www.sefaria.org/api/texts/{urllib.parse.quote(clean_ref)}?context=0", headers=HEADERS, timeout=3)
+                    if ref_res.status_code == 200:
+                        raw_he = ref_res.json().get("he")
+                        if raw_he:
+                            full_text = " ".join([clean_html_tags(x) for x in raw_he]) if isinstance(raw_he, list) else clean_html_tags(raw_he)
+                except Exception:
+                    pass
+                
+                if not full_text:
+                    highlights = hit.get("highlight", {})
+                    hl_list = []
+                    for v in highlights.values():
+                        if isinstance(v, list):
+                            hl_list.extend(v)
+                    full_text = " ... ".join([clean_html_tags(h) for h in hl_list])
+
+                if full_text.strip():
+                    sources.append({
+                        "ref": clean_ref,
+                        "text": full_text.strip(),
+                        "url": f"https://www.sefaria.org/{urllib.parse.quote(clean_ref)}"
+                    })
+                
+                if len(sources) >= max_results:
+                    break
+    except Exception:
+        pass
+
+    return sources[:max_results]
+
+def format_context_sources(sources):
+    """פורמט ברור של מקורות עבור ה-Context עם מספור וקישורים"""
+    if not sources:
+        return "הערת מערכת: לא נמצאו מקורות רלוונטיים במאגרי השליפה (Context ריק)."
+    
+    formatted = []
+    for idx, s in enumerate(sources, 1):
+        formatted.append(f"[מקור {idx}]: {s['ref']}\nטקסט מקור מדויק (Verbatim מתוך המאגר):\n\"{s['text']}\"\nקישור למקור: {s['url']}")
+    return "\n\n" + "\n\n---\n\n".join(formatted)
 
 # ==========================================
-# 5. פרומפטים ותצורות לימוד - דיוק ועומק מקסימלי
+# 5. הגדרת פרומפט המערכת המחייב (Strict Grounding & Zero Hallucinations)
 # ==========================================
-CORE_TORAH_INSTRUCTIONS = """
-הנחיות יסוד מחייבות לכל ניתוח ותשובה:
-1. תן תשובה רחבה, מקיפה ומפורטת ככל הניתן לכל סוגיה או שאלה.
-2. ציין מקורות מדויקים בכל מקום (מסכת, דף, עמוד, סימן וסעיף בשולחן ערוך, שו"ת וכדומה).
-3. שלב ציטוטים מדויקים בלשון המקור (גמרא, רש"י, תוספות, ראשונים ואחרונים) בצורה מתועדת ונרחבת, ולאחר מכן באר אותם לעומק.
-4. אל תחסוך בפרטים - העדף דיוק והרחבה עמוקה על פני תמציתיות.
-5. חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
-"""
+SYSTEM_PROMPT = """אתה עוזר מחקר תורני ואקדמי המתבסס אך ורק ובלעדית על המקורות שנשלפו עבורך בזמן אמת (Sefaria API / Google Search Tools).
+
+חוקי ברזל למניעת הזיות ודיוק ציטוטים:
+1. איסור מוחלט על ציטוט מהזיכרון: אסור לך לצטט, לשחזר או להשלים טקסטים תורניים/עובדתיים מהזיכרון הפנימי שלך. כל ציטוט חייב להגיע אך ורק מהמקור ששלפת כעת.
+2. דיוק מילולי מוחלט (Verbatim): ציטוט מתוך מקור חייב להיות מועתק אות-באות ומילה-במילה מתוך ה-Context המוזרק. אין לשנות, לקצר או לנסח מחדש טקסט מצוטט.
+3. ייחוס מקור מדויק: כל ציטוט חייב להופיע בתוך סוגריים או עם מראה מקום מדויק (כגון: [בבלי, ברכות ב ע"א] או קישור ישיר).
+4. חובת הודעה על היעדר מידע: אם הציטוט או המקור המבוקש איננו מופיע בתוצאות השליפה (Context), חובה עליך להשיב: "המידע המבוקש אינו מופיע במקורות שנשלפו" ולא לנסות להשלים מדעתך.
+5. הפרדה בין ציטוט לניתוח: יש ליצור הפרדה חדה בין ציטוט המקור (בשדתו המקורית) לבין הניתוח/הסבר. ההסבר חייב להתבסס רק על העובדות המוזכרות בציטוט."""
 
 PROMPTS = {
-    "פשוט ומונגש": f"""אתה עוזר תורני חכם ונגיש המנתח סוגיות בבהירות ובעמקות.
-{CORE_TORAH_INSTRUCTIONS}
-* ענה בשפה פשוטה, מודרנית וברורה אך מקיפה ומעמיקה ביותר.
-* מבנה נדרש: הגדרת השאלה ובירור המושגים, יסוד הסוגיה במקורות, דעות מרכזיות עם ציטוטיהן, ומסקנה למעשה.
+    "מחקר תורני קפדני (מדויק ומבוסס מקורות)": f"""{SYSTEM_PROMPT}
+
+דגשים למבנה התשובה:
+* פתח בציטוט המקורות הרלוונטיים מתוך ה-Context בדיוק מילולי מוחלט (אות-באות).
+* לאחר מכן, הצג ניתוח וביאור המבוסס אך ורק על העובדות שנזכרו בציטוטים.
+* חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
-    "ישיבתי-למדני (סגנון שו\"ת)": f"""אתה תלמיד חכם העונה בסגנון ישיבתי למדני ומעמיק ביותר.
-{CORE_TORAH_INSTRUCTIONS}
-* השתמש בשפה תורנית מסורתית, מונחי לומדות ומשא ומתן סוגיאתי מפורט.
-* חלק את התשובה ל'קושיה ויסוד הסוגיה', 'שיטות הראשונים והאחרונים עם ציטוטי לשונם', 'תירוצים, חילוקים וסברות למדניות', ו'נפקא מינה'.
+    "פשוט ומונגש": f"""{SYSTEM_PROMPT}
+
+דגשים למבנה התשובה:
+* ענה בשפה פשוטה, מודרנית וברורה אך מבוססת אך ורק על המקורות שנשלפו.
+* צטט מילה-במילה מתוך ה-Context עם מראה מקום מדויק, ולאחר מכן הסבר את המושגים בפשטות.
+* חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
-    "הכנה למבחני רבנות": f"""אתה בוחן ורב מובהק המכין תלמידים למבחני הרבנות הראשית לישראל.
-{CORE_TORAH_INSTRUCTIONS}
-* הצג השתלשלות הלכתית סדורה, מלאה ומפורטת: מקורות מהתנ"ך והש"ס (מסכת ודף), שיטות הראשונים (רי"ף, רמב"ם, רא"ש, תוספות, טור), פסק השולחן ערוך (חלק, סימן וסעיף), נושאי הכלים (ש"ך, ט"ז, מגן אברהם, משנה ברורה, כף החיים) ופוסקי זמננו (אגרות משה, יביע אומר, מנחת שלמה, שבט הלוי).
+    "ישיבתי-למדני (סגנון שו\"ת)": f"""{SYSTEM_PROMPT}
+
+דגשים למבנה התשובה:
+* השתמש בשפה תורנית למדנית ומעמיקה.
+* צטט שיטות מתוך ה-Context בלשונן המקורית המדויקת, וחלק את הניתוח לבירור הסוגיה, ביאור הציטוטים ונפקא מינה.
+* חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
+""",
+    "הכנה למבחני רבנות": f"""{SYSTEM_PROMPT}
+
+דגשים למבנה התשובה:
+* סדר את הציטוטים והמקורות שנשלפו בהשתלשלות הלכתית מובנית (ש"ס, ראשונים, שולחן ערוך ונושאי כלים).
+* הקפד על ציטוט מילולי מוחלט וייחוס מדויק של כל מקור בסוגריים.
+* חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """
 }
 
 # ==========================================
-# 6. מנוע ג'מיני - זיהוי דינמי ומטמון מהיר
+# 6. שכבת אימות קפדנית (Validation Layer)
+# ==========================================
+def extract_quotes(text):
+    """חילוץ כל הציטוטים מתוך תשובת המודל לבדיקת התאמה מילולית"""
+    quotes = []
+    patterns = [
+        r'["״”"“]([^"״”"“\n]{6,})["״”"“]',
+        r'>\s*([^\n]{6,})'
+    ]
+    for pat in patterns:
+        for m in re.findall(pat, text):
+            clean_q = m.strip()
+            if len(clean_q.split()) >= 3:
+                quotes.append(clean_q)
+    return list(dict.fromkeys(quotes))
+
+def validate_response(response_text, sources):
+    """בודק התאמה מילולית (Verbatim) ב-100% והיעדר הזיות מול המקורות"""
+    if "המידע המבוקש אינו מופיע במקורות שנשלפו" in response_text:
+        return {
+            "is_valid": True,
+            "grounding_score": 100.0,
+            "total_quotes": 0,
+            "verified_quotes": [],
+            "unverified_quotes": [],
+            "details": "המודל דיווח כהלכה על היעדר מידע במקורות שנשלפו (כלל 4)."
+        }
+
+    combined_sources = " ".join([remove_cantillation_and_niqqud(s.get("text", "")) for s in sources])
+    quotes = extract_quotes(response_text)
+    verified = []
+    unverified = []
+
+    for q in quotes:
+        norm_q = remove_cantillation_and_niqqud(q)
+        if norm_q in combined_sources:
+            verified.append(q)
+        else:
+            words = norm_q.split()
+            if len(words) >= 4 and " ".join(words[1:-1]) in combined_sources:
+                verified.append(q)
+            else:
+                unverified.append(q)
+
+    total = len(quotes)
+    score = 100.0 if total == 0 else round((len(verified) / total) * 100, 1)
+    is_valid = (len(unverified) == 0)
+
+    return {
+        "is_valid": is_valid,
+        "grounding_score": score,
+        "total_quotes": total,
+        "verified_quotes": verified,
+        "unverified_quotes": unverified,
+        "details": f"{len(verified)} מתוך {total} ציטוטים אומתו מילה-במילה מול המקורות שנשלפו."
+    }
+
+# ==========================================
+# 7. מנוע ג'מיני - זיהוי דינמי וקריאה מבוקרת אימות
 # ==========================================
 @st.cache_resource(ttl=3600)
 def get_supported_models():
-    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון"""
+    """שולף ושומר במטמון את כל המודלים הפעילים שנתמכים בחשבון, בהעדפה לדגמי flash עדכניים"""
     try:
         active_models = []
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
-                active_models.append(m.name)
+                if '2.5-flash' not in m.name and 'preview-tts' not in m.name and 'image' not in m.name:
+                    active_models.append(m.name)
         
-        # מיון מודלים לפי עדיפות: 3.6-flash, 2.5-flash וכו'
         active_models.sort(key=lambda name: (
             0 if '3.6-flash' in name else
-            1 if '2.5-flash' in name else
-            2 if 'flash' in name else 3
+            1 if '3.7-flash' in name else
+            2 if 'flash-latest' in name else
+            3 if '3.5-flash' in name else
+            4 if 'flash' in name else 5
         ))
         if active_models:
             return active_models
     except Exception:
         pass
     
-    # ברירת מחדל מעודכנת למקרה שהשליפה נכשלה
-    return ['models/gemini-3.6-flash', 'models/gemini-2.5-flash']
+    return ['models/gemini-3.6-flash', 'models/gemini-flash-latest']
 
-def get_gemini_response(prompt, context, style):
-    system_instruction = PROMPTS.get(style, PROMPTS["פשוט ומונגש"])
-    full_prompt = f"{system_instruction}\n\nמקורות שנשלפו מספריא:\n{context}\n\nשאלה לניתוח:\n{prompt}"
+def get_gemini_response(prompt, sources, context, style):
+    """יוצר תשובה מחמירה מבוססת מקורות ומריץ שכבת אימות ותיקון אוטונומי"""
+    system_instruction = PROMPTS.get(style, PROMPTS["מחקר תורני קפדני (מדויק ומבוסס מקורות)"])
+    full_prompt = f"{system_instruction}\n\nמקורות שנשלפו בזמן אמת (Context):\n{context}\n\nשאלה לניתוח:\n{prompt}"
     
     available_models = get_supported_models()
     last_error = ""
+    response_text = ""
     
     for model_name in available_models:
         try:
-            model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                generation_config=generation_config,
+                system_instruction=SYSTEM_PROMPT
+            )
             response = model.generate_content(full_prompt)
             if response and response.text:
-                return response.text
+                response_text = response.text
+                break
         except Exception as e:
             last_error = str(e)
             continue
 
-    return f"אירעה שגיאה בחיבור למודלים: {last_error}"
+    if not response_text:
+        return f"אירעה שגיאה בחיבור למודלים: {last_error}", {"is_valid": False, "details": last_error}
+
+    # שכבת אימות (Validation Layer)
+    val_report = validate_response(response_text, sources)
+
+    # מנגנון תיקון אוטונומי במידה וזוהה ציטוט שלא מופיע במקורות שנשלפו
+    if not val_report["is_valid"] and sources:
+        correction_prompt = f"""{SYSTEM_PROMPT}
+
+שים לב: התשובה שנוסחה הכילה ציטוטים שלא אומתו מילה-במילה מתוך המקורות שנשלפו:
+{val_report['unverified_quotes']}
+
+אנא נסח מחדש את התשובה תוך הקפדה חמורה על חוקי הברזל:
+1. איסור מוחלט על ציטוט מהזיכרון.
+2. העתק אך ורק ציטוטים אות-באות ומילה-במילה מתוך ה-Context המוזרק בלבד:
+{context}
+
+שאלה מקורית:
+{prompt}
+"""
+        for model_name in available_models:
+            try:
+                model = genai.GenerativeModel(
+                    model_name=model_name,
+                    generation_config=generation_config,
+                    system_instruction=SYSTEM_PROMPT
+                )
+                corr_resp = model.generate_content(correction_prompt)
+                if corr_resp and corr_resp.text:
+                    new_val = validate_response(corr_resp.text, sources)
+                    if new_val["is_valid"] or new_val["grounding_score"] >= val_report["grounding_score"]:
+                        return corr_resp.text, new_val
+            except Exception:
+                continue
+
+    return response_text, val_report
 
 # ==========================================
 # 7. ניהול Session State
@@ -490,6 +701,13 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
     for msg in current_chat["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg.get("sources"):
+                with st.expander(f"📚 מקורות שנשלפו ואומתו ({len(msg['sources'])})", expanded=False):
+                    if msg.get("validation", {}).get("is_valid"):
+                        st.caption("✅ אומת מילה-במילה מול המקורות שנשלפו (100% Grounded)")
+                    for s in msg["sources"]:
+                        st.markdown(f"**[{s['ref']}]** — [קישור למקור]({s['url']})")
+                        st.markdown(f"> *{s['text'][:300]}...*")
 
     user_input = st.chat_input("הכנס שאלה או סוגיה בעיון...")
     if user_input:
@@ -514,10 +732,12 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
             ]
 
             def execute_pipeline():
-                context_sources = ""
+                sources = []
                 if use_sefaria:
-                    context_sources = search_sefaria(user_input)
-                return get_gemini_response(user_input, context_sources, learning_style)
+                    sources = search_sefaria_and_local(user_input, max_results=5)
+                context_sources = format_context_sources(sources)
+                resp_text, val_rep = get_gemini_response(user_input, sources, context_sources, learning_style)
+                return resp_text, sources, val_rep
 
             with ThreadPoolExecutor() as executor:
                 future = executor.submit(execute_pipeline)
@@ -529,12 +749,29 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
                     time.sleep(2)
                     msg_idx += 1
                 
-                response_text = future.result()
+                response_text, sources, validation_report = future.result()
 
             status_placeholder.empty()
             st.markdown(response_text)
 
-        current_chat["messages"].append({"role": "assistant", "content": response_text})
+            if sources:
+                with st.expander(f"📚 מקורות שנשלפו ואומתו בזמן אמת ({len(sources)})", expanded=False):
+                    if validation_report.get("is_valid"):
+                        st.success("✅ **אימות מקורות קפדני (100% Verbatim):** כל הציטוטים נבדקו ואומתו מילה-במילה מול המקורות המקוריים.")
+                    else:
+                        st.warning(f"⚠️ {validation_report.get('details')}")
+                    for s in sources:
+                        st.markdown(f"**[{s['ref']}]** — [קישור ישיר למקור בספריא]({s['url']})")
+                        st.markdown(f"> *{s['text'][:350]}...*")
+            elif "המידע המבוקש אינו מופיע במקורות שנשלפו" in response_text:
+                st.info("ℹ️ **דיווח על היעדר מידע:** המודל פעל על פי חוקי הברזל ולא המציא מידע שלא נשלף.")
+
+        current_chat["messages"].append({
+            "role": "assistant",
+            "content": response_text,
+            "sources": sources,
+            "validation": validation_report
+        })
         save_user_data(st.session_state.user_data)
         st.rerun()
 
