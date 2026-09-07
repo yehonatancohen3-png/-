@@ -294,10 +294,10 @@ def remove_cantillation_and_niqqud(text):
     return re.sub(r'\s+', ' ', cleaned).strip()
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def fetch_sefaria_text_by_ref(ref_str: str) -> str:
-    """Step 2: Fetches full text once exact Ref is known (Sefaria API v3 with v1 fallback)."""
+def fetch_sefaria_text_and_he_ref(ref_str: str):
+    """שליפת טקסט מלא ומראה מקום מדויק בעברית (heRef) מספריא עם מנגנון מטמון מקומי"""
     if not ref_str:
-        return ""
+        return "", ""
     clean_ref = ref_str.strip()
     
     # 1. ניסיון שליפה מ-API v3 של ספריא
@@ -306,6 +306,7 @@ def fetch_sefaria_text_by_ref(ref_str: str) -> str:
         res = HTTP_SESSION.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
+            he_ref = data.get("heRef", "")
             versions = data.get("versions", [])
             for v in versions:
                 if v.get("language") == "he":
@@ -321,10 +322,10 @@ def fetch_sefaria_text_by_ref(ref_str: str) -> str:
                         flatten(text)
                         clean_t = clean_html_tags(" ".join(flat))
                         if clean_t:
-                            return clean_t
+                            return clean_t, he_ref
                     clean_t = clean_html_tags(str(text))
                     if clean_t:
-                        return clean_t
+                        return clean_t, he_ref
     except Exception as e:
         print(f"Error fetching ref {clean_ref}: {e}")
 
@@ -333,23 +334,31 @@ def fetch_sefaria_text_by_ref(ref_str: str) -> str:
         url2 = f"https://www.sefaria.org/api/texts/{urllib.parse.quote(clean_ref)}?context=0"
         res2 = HTTP_SESSION.get(url2, timeout=4)
         if res2.status_code == 200:
-            raw_he = res2.json().get("he")
+            data2 = res2.json()
+            he_ref = data2.get("heRef", "")
+            raw_he = data2.get("he")
             if raw_he:
                 if isinstance(raw_he, list):
-                    return clean_html_tags(" ".join([str(x) for x in raw_he]))
-                return clean_html_tags(str(raw_he))
+                    return clean_html_tags(" ".join([str(x) for x in raw_he])), he_ref
+                return clean_html_tags(str(raw_he)), he_ref
     except Exception:
         pass
 
-    return ""
+    return "", ""
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_sefaria_text_by_ref(ref_str: str) -> str:
+    """Step 2: Fetches full text once exact Ref is known (Sefaria API v3 with v1 fallback)."""
+    text, _ = fetch_sefaria_text_and_he_ref(ref_str)
+    return text
 
 fetch_single_ref_text = fetch_sefaria_text_by_ref
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_sefaria_sources_robust(user_query: str) -> List[str]:
     """
-    Fetches raw Hebrew sources from Sefaria API with automatic URL encoding
-    and multi-stage fallback.
+    Fetches raw Hebrew sources from Sefaria API with automatic URL encoding,
+    Hebrew reference titles, and multi-stage fallback.
     """
     retrieved_texts = []
     raw_query = user_query.strip()
@@ -386,10 +395,17 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
                     m = re.match(r'^([^(]+)', raw_id)
                     ref = m.group(1).strip() if m else raw_id
                 
+                he_ref = source_data.get("heRef", "")
                 he_text = source_data.get("he", "")
-                # שליפת הטקסט המלא אם אינו קיים בתוצאת החיפוש הישירה
-                if not he_text and ref:
-                    he_text = fetch_sefaria_text_by_ref(ref)
+                
+                # שליפת הטקסט המלא ומראה המקום בעברית אם נדרש
+                if ref:
+                    fetched_text, fetched_he_ref = fetch_sefaria_text_and_he_ref(ref)
+                    if not he_text and fetched_text:
+                        he_text = fetched_text
+                    if fetched_he_ref:
+                        he_ref = fetched_he_ref
+                
                 if not he_text and hit.get("highlight"):
                     hl = hit.get("highlight", {})
                     hl_snippets = []
@@ -398,21 +414,25 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
                             hl_snippets.extend(v)
                     he_text = " ... ".join(hl_snippets)
                 
-                # Strip HTML tags if present
+                display_ref = he_ref if he_ref else (ref or "")
+                
+                # ניקוי תגיות HTML במידה וקיימות
                 clean_he = re.sub(r'<[^>]+>', '', str(he_text)).strip()
-                if clean_he and ref and not any(c.startswith(f"[{ref}]") for c in retrieved_texts):
-                    retrieved_texts.append(f"[{ref}]\n{clean_he}")
+                if clean_he and display_ref and not any(c.startswith(f"[{display_ref}]") for c in retrieved_texts):
+                    retrieved_texts.append(f"[{display_ref}]\n{clean_he}")
     except Exception as e:
         print(f"Sefaria Search API Error: {e}")
 
     # 3. Stage 2: Fallback to Direct Ref Fetch if Search returned empty
     if not retrieved_texts:
         try:
-            # Try direct text fetch if query matches a known book/ref
+            # ניסיון שליפה ישירה של טקסט אם השאילתה תואמת מראה מקום או ספר מוכר
             direct_url = f"https://www.sefaria.org/api/v3/texts/{encoded_query}?context=0"
             res = HTTP_SESSION.get(direct_url, timeout=5)
             if res.status_code == 200:
                 data = res.json()
+                he_ref = data.get("heRef", "")
+                display_ref = he_ref if he_ref else user_query
                 versions = data.get("versions", [])
                 for v in versions:
                     if v.get("language") == "he":
@@ -420,7 +440,7 @@ def get_sefaria_sources_robust(user_query: str) -> List[str]:
                         text_str = " ".join(t) if isinstance(t, list) else str(t)
                         clean_t = re.sub(r'<[^>]+>', '', text_str).strip()
                         if clean_t:
-                            retrieved_texts.append(f"[{user_query}]\n{clean_t}")
+                            retrieved_texts.append(f"[{display_ref}]\n{clean_t}")
                             break
         except Exception as e:
             print(f"Sefaria Direct Fetch Error: {e}")
@@ -508,44 +528,62 @@ def format_context_sources(sources):
 # ==========================================
 # 5. הגדרת פרומפט המערכת המחייב (חוקי ברזל לכל סגנונות התשובה)
 # ==========================================
-SYSTEM_PROMPT = """אתה עוזר מחקר תורני ולמדני. תפקידך לספק תשובות מלאות, ברורות ונורמליות (בהתאם לסגנון שנבחר: פשוט ומונגש, שו"ת, או הכנה למבחני רבנות), תוך שמירה מוחלטת על חוקי ציטוט מחמירים.
+SYSTEM_PROMPT = """אתה עוזר מחקר תורני ולמדני מומחה. תפקידך לספק תשובות מלאות, ברורות ומדויקות (בהתאם לסגנון שנבחר: פשוט ומונגש, שו"ת, הכנה למבחני רבנות, או ישיבתי-למדני), תוך שמירה מחמירה על חוקי הברזל הבאים:
 
-חוקי המענה והציטוט:
-1. מענה מלא וברור: ענה על שאלת המשתמש בצורה נורמלית, מוסברת ומאורגנת. הסבר את המושגים, ההלכות והסברות בשפה ברורה וקליחה.
-2. דיוק מילולי מוחלט (Verbatim) בציטוטים: כאשר אתה מביא ציטוט מתוך מקור (בתוך מרכאות), הציטוט חייב להיות מועתק אות-באות ומילה-במילה מתוך המקורות שנשלפו עבורך בלבד.
-3. איסור מוחלט על ציטוט מהזיכרון: אסור לשחזר או להמציא ציטוטים בתוך מרכאות מהזיכרון הפנימי.
-4. הפרדה בין הסבר לציטוט:
-   - את הסבר המושג/הסוגיה כתוב בלשונך באופן הברור והטבעי ביותר.
-   - את הציטוטים הבא כראיה או כמקור בתוך מרכאות בדיוק מוחלט, בצמוד למראה מקום.
-5. חסר במקורות: אם הציטוט המדויק אינו מופיע במקורות שנשלפו, הסבר את הכלל/המושג בלשונך, וציין בקצרה שמראה המקום המדויק של הציטוט המילולי לא נשלף במלואו."""
+חוקי ברזל לעיצוב ולמבנה התשובה:
+
+1. מקורות בעברית בלבד:
+   - כל מראי המקומות, שמות הספרים, המסכתות והמחברים חייבים להופיע בלשון הקודש/עברית בלבד (למשל: "רמב"ם הלכות חובל ומזיק", "מסכת סנהדרין", "שולחן ערוך חושן משפט", ולא באנגלית או בתעתיק לטיני).
+   - אם מראה מקום שנשלף מ-API מכיל שם באנגלית, תרגם או המר אותו לשמו העברי המקובל והמקור.
+
+2. מבנה תשובה שלם - מהגמרא ועד להלכה למעשה:
+   כל ניתוח של סוגיה או מושג חייב לעקוב אחר ההשתלשלות ההלכתית המלאה ולא לעצור בראשונים:
+   א. יסוד הסוגיה ומקורות חז"ל (משנה, גמרא, מדרשי הלכה).
+   ב. מחלוקת הראשונים (רמב"ם, רש"י, תוספות, ראב"ד, רמב"ן, רשב"א, רא"ש, רי"ף וכו').
+   ג. ניתוח וחקירות האחרונים (שולחן ערוך, נושאי כלים, הגר"ח מבריסק, אגרות משה, ציץ אליעזר וכו').
+   ד. סיכום הפסיקה וההלכה למעשה.
+
+3. דיוק מילולי (Verbatim):
+   - ציטוטים בתוך מרכאות חייבים להיפלט בדיוק מוחלט מתוך המקורות שנשלפו, תוך שמירה על המבנה והלשון העברית המקורית.
+   - איסור מוחלט על ציטוט מהזיכרון הפנימי.
+   - הפרדה בין הסבר לציטוט: הסבר את המושג בלשונך הברורה והטבעית, ואת הציטוט הבא בתוך מרכאות בדיוק מוחלט בצמוד למראה מקום.
+   - חסר במקורות: אם הציטוט המדויק אינו מופיע במקורות שנשלפו, הסבר את הכלל בלשונך וציין שמראה המקום המדויק של הציטוט המילולי לא נשלף במלואו."""
 
 PROMPTS = {
     "פשוט ומונגש": f"""{SYSTEM_PROMPT}
 
 דגשי סגנון - פשוט ומונגש:
-* ספק הסבר מלא, ברור ומאורגן בגובה העיניים על שאלת המשתמש.
-* באר מושגים וטעמים בלשון בהירה וקולחת.
-* ציטוטים מהמקורות שלב בתוך מרכאות בדיוק מילולי מוחלט (אות-באות מהמקורות שנשלפו) עם מראה מקום בסוגריים.
+* ספק הסבר מלא, בהיר ומסודר בגובה העיניים בהתאם למבנה השלם (יסוד הסוגיה בחז"ל, שיטות הראשונים, הכרעת האחרונים וההלכה למעשה).
+* הקפד על שמות מקורות ומראי מקומות בלשון הקודש ובעברית בלבד.
+* באר מושגים, סברות וטעמים בלשון פשוטה וקולחת.
+* ציטוטים מהמקורות שלב בתוך מרכאות בדיוק מילולי מוחלט (אות-באות מהמקורות שנשלפו) עם מראה מקום עברי בסוגריים.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "סגנון שו\"ת": f"""{SYSTEM_PROMPT}
 
 דגשי סגנון - סגנון שו"ת:
-* מבנה תשובה מסודר ומלא: הצגת השאלה, משא ומתן הלכתי ומסקנה ברורה ומנומקת.
-* הסבר את הטעמים והסברות בלשון תורנית רהוטה ועשירה, ואת הציטוטים הבא בתוך מרכאות בדיוק מילולי מוחלט (Verbatim) עם מראי מקומות בסוגריים.
+* מבנה תשובה מסודר ומלא לפי ארבעת השלבים: הצגת השאלה, יסוד הסוגיה במקורות חז"ל, משא ומתן בשיטות הראשונים והאחרונים, ומסקנה ברורה ומנומקת של ההלכה למעשה.
+* הקפד על שמות מקורות ומראי מקומות בלשון הקודש ובעברית בלבד.
+* הסבר את הטעמים והסברות בלשון תורנית רהוטה ועשירה, ואת הציטוטים הבא בתוך מרכאות בדיוק מילולי מוחלט (Verbatim) עם מראי מקומות עבריים בסוגריים.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "הכנה למבחני רבנות": f"""{SYSTEM_PROMPT}
 
 דגשי סגנון - הכנה למבחני רבנות:
-* הצג תשובה מלאה, שיטתית ומקיפה בהשתלשלות הלכתית סדורה (סוגיות הש"ס, ראשונים, שולחן ערוך ונושאי כלים).
+* הצג תשובה מלאה, שיטתית ומקיפה בהשתלשלות הלכתית מובחנת ומסודרת בסעיפים:
+  א. יסוד הסוגיה ומקורות חז"ל (משנה, גמרא, מדרשי הלכה).
+  ב. מחלוקות הראשונים וטעמיהם (רמב"ם, רש"י, תוספות, רא"ש, רי"ף, רמב"ן וכו').
+  ג. פסק השולחן ערוך והרמ"א וניתוח נושאי הכלים והאחרונים.
+  ד. סיכום הפסיקה וההלכה למעשה למבחן הרבנות.
+* הקפד על שמות ספרים ומראי מקומות בלשון הקודש ובעברית בלבד.
 * באר את שיטות הפוסקים וטעמיהם בהרחבה, ואת הציטוטים הבא בתוך מרכאות אות-באות מתוך המקורות שנשלפו.
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """,
     "ישיבתי-למדני": f"""{SYSTEM_PROMPT}
 
 דגשי סגנון - ישיבתי-למדני:
-* פתח מהלך למדני שלם ומעמיק: בירור הסוגיה, קושיות, תירוצים, דיוקים וחילוקי סברות.
+* פתח מהלך למדני שלם ומעמיק בהשתלשלות מלאה: יסוד הסוגיה בחז"ל, שיטות הראשונים, חקירות האחרונים וראשי הישיבות (בריסק, קובץ שיעורים, אגרות משה וכו'), קושיות, תירוצים, דיוקים וחילוקי סברות, עד להכרעת ההלכה למעשה.
+* הקפד על שמות ספרים, מסכתות ומחברים בלשון הקודש ובעברית בלבד.
 * נסח את המשא ומתן הלמדני בלשונך בצורה בהירה ועמוקה, ואת הציטוטים המדויקים הבא בתוך מרכאות בדיוק מוחלט (אות-באות מתוך המקורות שנשלפו).
 * חובה לסיים כל תשובה במשפט: "הערה: תוכן זה מיועד ללימוד בלבד, ואין לפסוק ממנו הלכה למעשה."
 """
@@ -554,6 +592,8 @@ PROMPTS = {
 # תמיכה לאחור בבחירות סגנון קודמות
 PROMPTS["ישיבתי-למדני (סגנון שו\"ת)"] = PROMPTS["סגנון שו\"ת"]
 PROMPTS["מחקר תורני קפדני (מדויק ומבוסס מקורות)"] = PROMPTS["ישיבתי-למדני"]
+
+STYLE_OPTIONS = ["פשוט ומונגש", "סגנון שו\"ת", "הכנה למבחני רבנות", "ישיבתי-למדני"]
 
 # ==========================================
 # 6. שכבת אימות קפדנית (Validation Layer)
@@ -663,7 +703,7 @@ def stream_gemini_response(prompt, context, style="פשוט ומונגש"):
             model = genai.GenerativeModel(
                 model_name=model_name,
                 generation_config=generation_config,
-                system_instruction=SYSTEM_PROMPT
+                system_instruction=system_instruction
             )
             response = model.generate_content(full_prompt, stream=True)
             has_yielded = False
@@ -799,7 +839,7 @@ if st.session_state.current_chat_id and st.session_state.current_chat_id in st.s
     
     col1, col2 = st.columns([1, 1])
     with col1:
-        learning_style = st.selectbox("🎯 בחר סגנון לימוד ותשובה:", list(PROMPTS.keys()))
+        learning_style = st.selectbox("🎯 בחר סגנון לימוד ותשובה:", STYLE_OPTIONS)
     with col2:
         use_sefaria = st.checkbox("🔍 שלוף מקורות בזמן אמת (Sefaria API)", value=True)
 
